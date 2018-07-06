@@ -632,4 +632,46 @@ void camlsnark_mnt6_field_vector_delete(std::vector<FieldT>* v) {
   delete v;
 }
 
+// Groth/Bowe-Gabizon functions
+r1cs_bg_ppzksnark_keypair<ppT>* camlsnark_mnt6_bg_r1cs_constraint_system_create_keypair(
+    r1cs_constraint_system<FieldT>* sys) {
+  auto res = r1cs_bg_ppzksnark_generator<ppT>(*sys);
+  return new r1cs_bg_ppzksnark_keypair<ppT>(res);
+}
+
+std::string* camlsnark_mnt6_bg_proof_to_string(
+    r1cs_bg_ppzksnark_proof<ppT>* p) {
+  std::stringstream stream;
+  stream << *p;
+  return new std::string(stream.str());
+}
+
+r1cs_bg_ppzksnark_proof<ppT>* camlsnark_mnt6_bg_proof_of_string(std::string* s) {
+  r1cs_bg_ppzksnark_proof<ppT>*  p = new r1cs_bg_ppzksnark_proof<ppT>();
+  std::stringstream stream(*s);
+  stream >> *p;
+  return p;
+}
+
+r1cs_bg_ppzksnark_proof<ppT>* camlsnark_mnt6_bg_proof_create(
+    r1cs_bg_ppzksnark_proving_key<ppT>* key,
+    std::vector<FieldT>* primary_input,
+    std::vector<FieldT>* auxiliary_input,
+    FieldT* d) {
+  auto res = r1cs_bg_ppzksnark_prover(*key, *primary_input, *auxiliary_input, *d);
+  return new r1cs_bg_ppzksnark_proof<ppT>(res);
+}
+
+void camlsnark_mnt6_bg_proof_delete(r1cs_bg_ppzksnark_proof<ppT>* proof) {
+  delete proof;
+}
+
+bool camlsnark_mnt6_bg_proof_verify(
+    r1cs_bg_ppzksnark_proof<ppT>* proof,
+    r1cs_bg_ppzksnark_verification_key<ppT>* key,
+    std::vector<FieldT>* primary_input) {
+  return r1cs_bg_ppzksnark_verifier_weak_IC(*key, *primary_input, *proof);
+}
+
+
 }

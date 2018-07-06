@@ -1,5 +1,6 @@
 #include <libsnark/relations/variable.hpp>
 #include <libsnark/zk_proof_systems/ppzksnark/r1cs_ppzksnark/r1cs_ppzksnark.hpp>
+#include <libsnark/zk_proof_systems/ppzksnark/r1cs_bg_ppzksnark/r1cs_bg_ppzksnark.hpp>
 #include <libsnark/relations/constraint_satisfaction_problems/r1cs/r1cs.hpp>
 #include <libsnark/gadgetlib1/pb_variable.hpp>
 #include <libsnark/gadgetlib1/protoboard.hpp>
@@ -13,5 +14,6 @@
 
 typedef libff::bn128_pp ppT;
 typedef libff::Fr<ppT> FieldT;
+typedef libff::Fq<ppT> OuterFieldT;
 typedef ppT::G1_type G1;
 typedef ppT::G2_type G2;

@@ -72,6 +72,13 @@ public:
     Fp2_model squared_karatsuba() const;
     Fp2_model squared_complex() const;
 
+    std::vector<my_Fp> coordinates()
+    {
+        std::vector<my_Fp> res = std::vector<my_Fp>();
+        res.push_back(c0); res.push_back(c1);
+        return res;
+    }
+
     template<mp_size_t m>
     Fp2_model operator^(const bigint<m> &other) const;
 

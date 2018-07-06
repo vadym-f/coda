@@ -71,6 +71,15 @@ public:
     Fp3_model Frobenius_map(unsigned long power) const;
     Fp3_model sqrt() const; // HAS TO BE A SQUARE (else does not terminate)
 
+    std::vector<my_Fp> coordinates()
+    {
+        std::vector<my_Fp> result = std::vector<my_Fp>();
+        result.push_back(c0); 
+        result.push_back(c1);
+        result.push_back(c2);
+        return result;
+    }
+
     template<mp_size_t m>
     Fp3_model operator^(const bigint<m> &other) const;
 

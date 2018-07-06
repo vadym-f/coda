@@ -631,8 +631,61 @@ FieldT* camlsnark_mnt4_field_vector_get(std::vector<FieldT>* v, int i) {
 void camlsnark_mnt4_field_vector_delete(std::vector<FieldT>* v) {
   delete v;
 }
+/*
+// These can't just be translated from mnt4 to mnt4 and mnt6 (i think) 
+// because the functions are actually different (mnt4 doesnt have X_, Y_ for example)
+
+// G1 functions
+void camlsnark_mnt4_g1_to_affine(libff::G1<ppT>* g) {
+  g->to_affine_coordinates();
+}
+
+libff::bigint<libff::mnt4_q_limbs>*  camlsnark_mnt4_g1_get_x(libff::G1<ppT>* g) {
+  return new libff::bigint<libff::mnt4_q_limbs>(g->X().as_bigint());
+}
+
+libff::bigint<libff::mnt4_q_limbs>*  camlsnark_mnt4_g1_get_y(libff::G1<ppT>* g) {
+  return new libff::bigint<libff::mnt4_q_limbs>(g->Y().as_bigint());
+}
+
+void camlsnark_mnt4_bg_g1_delete(libff::G1<ppT>* g) {
+  delete g;
+}
+
+// G2 functions
+
+void camlsnark_mnt4_g2_to_affine(libff::G2<ppT>* g) {
+  g->to_affine_coordinates();
+}
+
+// should these not return vectors ?
+// there's no function on libff::G2 elements that's called X_ ?
+std::vector<libff::bigint<libff::mnt4_q_limbs>>*  camlsnark_mnt4_g2_get_x(libff::G2<ppT>* g) {
+  std::vector<libff::Fq<ppT>> field_elts = g->X().coordinates();
+  std::vector<libff::bigint<libff::mnt4_q_limbs>>* result = new std::vector<libff::bigint<libff::mnt4_q_limbs>>();
+  for (auto &elt : field_elts) {
+    result.push(elt.as_bigint())
+  }
+  return result;
+}
+
+// same as above...
+libff::bigint<libff::mnt4_q_limbs>*  camlsnark_mnt4_g2_get_y(libff::G2<ppT>* g) {
+  std::vector<libff::Fq<ppT>> field_elts = g->Y().coordinates();
+  std::vector<libff::bigint<libff::mnt4_q_limbs>>* result = new std::vector<libff::bigint<libff::mnt4_q_limbs>>();
+  for (auto &elt : field_elts) {
+    result.push(elt.as_bigint())
+  }
+  return result;
+  }
+
+void camlsnark_mnt4_g2_delete(libff::G2<ppT>* g) {
+  delete g;
+}
+*/
 
 // Groth/Bowe-Gabizon functions
+
 r1cs_bg_ppzksnark_keypair<ppT>* camlsnark_mnt4_bg_r1cs_constraint_system_create_keypair(
     r1cs_constraint_system<FieldT>* sys) {
   auto res = r1cs_bg_ppzksnark_generator<ppT>(*sys);

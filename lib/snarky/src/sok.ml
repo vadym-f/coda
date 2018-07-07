@@ -4,6 +4,8 @@ open Foreign
 
 (*
 
+can we open libsnark.ml? :(
+
 val sok_sign
     :  message:bool list
     -> proving_key
@@ -29,23 +31,21 @@ hash function:
 
 (* we should have this actually defined properly rather than 
 just be a pointer / expecting void*)
+
+(*
 type proof = unit ptr
 let typ = ptr void
-
-
 
 let prove =
     let stub =
     foreign "r1cs_bg_ppzksnark_split_prover"
-    (bool list @-> pk @-> aux @-> witness @-> proof @->
-    returning proof)
+    
 
-
-(* we need to cycle through the bits not just 0 *)
-let get_bit x =
+(* we need to cycle through the bits not just the 0th *)
+let get_bit_list x =
     test_bit (of_field (x)) 0))
 
 
-
+*)
 
 

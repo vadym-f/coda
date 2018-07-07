@@ -18,7 +18,7 @@ libff::bigint<libff::mnt4_q_limbs>*  camlsnark_mnt4_g1_get_y(libff::G1<ppT>* g) 
   return new libff::bigint<libff::mnt4_q_limbs>(g->Y().as_bigint());
 }
 
-void camlsnark_mnt4_bg_g1_delete(libff::G1<ppT>* g) {
+void camlsnark_mnt4_g1_delete(libff::G1<ppT>* g) {
   delete g;
 }
 
@@ -28,8 +28,6 @@ void camlsnark_mnt4_g2_to_affine(libff::G2<ppT>* g) {
   g->to_affine_coordinates();
 }
 
-// should these not return vectors ?
-// there's no function on libff::G2 elements that's called X_ ?
 std::vector<libff::bigint<libff::mnt4_q_limbs>>*  camlsnark_mnt4_g2_get_x(libff::G2<ppT>* g) {
   std::vector<libff::Fq<ppT>> field_elts = g->X().coordinates();
   std::vector<libff::bigint<libff::mnt4_q_limbs>>* result = new std::vector<libff::bigint<libff::mnt4_q_limbs>>();
@@ -39,7 +37,7 @@ std::vector<libff::bigint<libff::mnt4_q_limbs>>*  camlsnark_mnt4_g2_get_x(libff:
   return result;
 }
 
-// same as above...
+
 std::vector<libff::bigint<libff::mnt4_q_limbs>>*  camlsnark_mnt4_g2_get_y(libff::G2<ppT>* g) {
   std::vector<libff::Fq<ppT>> field_elts = g->Y().coordinates();
   std::vector<libff::bigint<libff::mnt4_q_limbs>>* result = new std::vector<libff::bigint<libff::mnt4_q_limbs>>();
@@ -114,7 +112,7 @@ void camlsnark_mnt4_r1cs_ppzksnark_verification_key_variable_generate_r1cs_witne
   vkv->generate_r1cs_witness(*vk);
 }
 
-// proof
+// proof variable
 r1cs_ppzksnark_proof_variable<ppT>* camlsnark_mnt4_r1cs_ppzksnark_proof_variable_create(
     protoboard<FieldT>* pb) {
   return new r1cs_ppzksnark_proof_variable<ppT>(*pb, "proof_variable");

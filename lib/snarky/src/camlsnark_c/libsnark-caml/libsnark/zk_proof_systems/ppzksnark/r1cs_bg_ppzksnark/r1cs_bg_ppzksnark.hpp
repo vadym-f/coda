@@ -355,7 +355,34 @@ public:
     bool operator==(const r1cs_bg_ppzksnark_proof<ppT> &other) const;
     friend std::ostream& operator<< <ppT>(std::ostream &out, const r1cs_bg_ppzksnark_proof<ppT> &proof);
     friend std::istream& operator>> <ppT>(std::istream &in, r1cs_bg_ppzksnark_proof<ppT> &proof);
+
+    /* can we not just use proof.g_A / proof->g_A	
+    libff::G1<ppT> get_a() const 
+    {
+	return g_A;
+    } 
+    
+    libff::G2<ppT> get_b() const 
+    {
+	return g_B;
+    } 
+    
+    libff::G1<ppT> get_c() const 
+    {
+	return g_C
+    } 
+    
+    libff::G2<ppT> get_delta_prime() const 
+    {
+	return g_delta_prime;
+    } */
+
 };
+
+
+
+
+
 
 
 /***************************** Main algorithms *******************************/

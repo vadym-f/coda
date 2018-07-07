@@ -369,9 +369,11 @@ struct
 
     let typ = ptr void
 
+    open Prefix
+
     let func_name = with_prefix prefix
 
-    let delete = foreign (with_prefix prefix "delete") (typ @-> returning void)
+    let delete = foreign (func_name "delete") (typ @-> returning void)
 
     let size_in_bits =
       foreign (func_name "size_in_bits") (typ @-> returning int)
@@ -538,7 +540,7 @@ struct
         k
   end
 
-  module Keypair = Make_keypair(struct let prefix = with_prefix M.prefix "keypair" end)
+  module Keypair = Make_keypair(struct let prefix = with_prefix M.prefix "keypair" end)(Proving_key0)(Verification_key)
 
   module R1CS_constraint_system : sig
     type t
@@ -922,8 +924,8 @@ struct
 
       val find_wnaf : Unsigned.Size_t.t -> t -> Long_vector.t
       (* we actually dont need this (yet?)*)
-      module Vector : Vector.S with type elt = t
-      end
+      module Vector : Vector.S with type elt = t  
+    end
 
     module Q : sig
       type t
@@ -938,9 +940,9 @@ struct
 
       module Vector : Vector.S with type elt = t
     end
-    
     end
-
+    = struct
+  
     module Common (N : sig
       val prefix : string
     end) =
@@ -949,8 +951,10 @@ struct
 
       let typ = ptr void
 
+      let prefix = with_prefix (with_prefix M.prefix "bigint") N.prefix
+
       let func_name =
-        with_prefix (with_prefix (with_prefix M.prefix "bigint") N.prefix)
+        with_prefix prefix
 
       let delete = foreign (func_name "delete") (typ @-> returning void)
 
@@ -966,6 +970,12 @@ struct
           let v = stub x y in
           Caml.Gc.finalise Long_vector.delete v ;
           v
+
+        module Vector = Vector.Make(struct
+        type elt = t
+        let typ = typ
+        let prefix = with_prefix prefix "vector"
+        end)
     end
 
     module R = struct
@@ -975,8 +985,7 @@ struct
         let prefix = prefix
       end)
 
-      let func_name =
-        with_prefix (with_prefix (with_prefix M.prefix "bigint") prefix)
+      let func_name = with_prefix prefix
 
       let div =
         let stub = foreign (func_name "div") (typ @-> typ @-> returning typ) in
@@ -1026,6 +1035,12 @@ struct
       let prefix = "q"
     end)
   end
+
+module Bn128 = Make (struct
+  let prefix = "camlsnark_bn128"
+end)
+
+module Make_mnt_specific (M : sig val prefix : string end) = struct 
 
   module G1 = struct 
     type t = unit ptr
@@ -1078,21 +1093,21 @@ struct
     let get_x : t -> Bigint.Q.Vector.t =
     let stub =
         foreign (with_prefix prefix "get_x")
-          (typ @-> returning Bigint.Q.typ)
+          (typ @-> returning Bigint.Q.Vector.typ)
       in
       fun g ->
         let x = stub g in
-        Caml.Gc.finalise Bigint.Q.delete x;
+        Caml.Gc.finalise Bigint.Q.Vector.delete x;
         x
     
     let get_y : t -> Bigint.Q.Vector.t =
     let stub =
         foreign (with_prefix prefix "get_y")
-          (typ @-> returning Bigint.Q.typ)
+          (typ @-> returning Bigint.Q.Vector.typ)
       in
       fun g ->
         let y = stub g in
-        Caml.Gc.finalise Bigint.Q.delete y;
+        Caml.Gc.finalise Bigint.Q.Vector.delete y;
         y
   end
 
@@ -1204,7 +1219,7 @@ struct
       let verify =
       foreign (func_name "verify") 
        (typ @-> Verification_key.typ @-> Field.Vector.typ @-> returning bool)
-
+(*
       let really_make_proof pk ~(hash : bool list -> Field.t) ~primary ~auxiliary : (t, Field.t) =
         let compress_g1 g =
           (G1.get_x g, 
@@ -1216,24 +1231,32 @@ struct
         let b = get_b proof in
         let c = get_c proof in
         let delta_prime = get_delta_prime proof in
-        (* stuff goes here *)
+          let a_bits = get_bits_G1 a in
+          let b_bits = get_bits_G2 b in
+          let c_bits = get_bits_G1 c in
+          let delta_prime_bits = get_bits_G2 delta_prime in
+            let h = hash a_bits b_bits c_bits delta_prime_bits *)
+
+
     end
   end
 end
+end
 
-module Bn128 = Make (struct
-  let prefix = "camlsnark_bn128"
-end)
 
 module type S = module type of Bn128
 
-module Mnt6 = Make (struct
-  let prefix = "camlsnark_mnt6"
-end)
+module Mnt6 = struct
+  module Prefix = struct let prefix = "camlsnark_mnt6" end
+  include Make (Prefix)
+  include Make_mnt_specific(Prefix)
+end
 
-module Mnt4 = Make (struct
-  let prefix = "camlsnark_mnt4"
-end)
+module Mnt4 =struct
+  module Prefix = struct let prefix = "camlsnark_mnt4" end
+  include Make (Prefix)
+  include Make_mnt_specific(Prefix)
+end
 
 module Curves = struct
   let mk_coeff typ name =

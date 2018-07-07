@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.tcc": "cpp",
+        "cstdio": "cpp",
+        "cwchar": "cpp",
+        "iosfwd": "cpp",
+        "cinttypes": "cpp",
+        "cstdint": "cpp"
+    }
+}

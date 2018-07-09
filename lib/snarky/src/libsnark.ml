@@ -1036,11 +1036,15 @@ struct
     end)
   end
 
+end
+
 module Bn128 = Make (struct
   let prefix = "camlsnark_bn128"
 end)
 
-module Make_mnt_specific (M : sig val prefix : string end) = struct 
+module Make_mnt (M : sig val prefix : string end) = struct 
+  include Make(M)
+  open M
 
   module G1 = struct 
     type t = unit ptr
@@ -1241,22 +1245,16 @@ module Make_mnt_specific (M : sig val prefix : string end) = struct
     end
   end
 end
-end
+
 
 
 module type S = module type of Bn128
 
-module Mnt6 = struct
-  module Prefix = struct let prefix = "camlsnark_mnt6" end
-  include Make (Prefix)
-  include Make_mnt_specific(Prefix)
-end
+module Mnt6 =
+  Make_mnt(struct let prefix = "camlsnark_mnt6" end)
 
-module Mnt4 =struct
-  module Prefix = struct let prefix = "camlsnark_mnt4" end
-  include Make (Prefix)
-  include Make_mnt_specific(Prefix)
-end
+module Mnt4 = 
+  Make_mnt(struct let prefix = "camlsnark_mnt4" end)
 
 module Curves = struct
   let mk_coeff typ name =

@@ -702,6 +702,65 @@ void camlsnark_bn128_g2_delete(libff::G2<ppT>* g) {
 
 // Groth/Bowe-Gabizon functions
 
+
+r1cs_constraint_system<FieldT>* camlsnark_bn128_bg_ppzksnark_proving_key_r1cs_constraint_system(
+    r1cs_bg_ppzksnark_proving_key<ppT>* pk) {
+  return &pk->constraint_system;
+}
+
+r1cs_bg_ppzksnark_proving_key<ppT>* camlsnark_bn128_bg_keypair_pk(r1cs_bg_ppzksnark_keypair<ppT>* keypair) {
+  return new r1cs_bg_ppzksnark_proving_key<ppT>(keypair->pk);
+}
+
+r1cs_bg_ppzksnark_verification_key<ppT>* camlsnark_bn128_bg_keypair_vk(r1cs_bg_ppzksnark_keypair<ppT>* keypair) {
+  return new r1cs_bg_ppzksnark_verification_key<ppT>(keypair->vk);
+}
+
+void camlsnark_bn128_bg_keypair_delete(r1cs_bg_ppzksnark_keypair<ppT>* keypair) {
+  delete keypair;
+}
+
+void camlsnark_bn128_bg_proving_key_delete(r1cs_bg_ppzksnark_proving_key<ppT>* pk) {
+  delete pk;
+}
+
+std::string* camlsnark_bn128_bg_proving_key_to_string(r1cs_bg_ppzksnark_proving_key<ppT>* pk) {
+  std::stringstream stream;
+  stream << *pk;
+  return new std::string(stream.str());
+}
+
+r1cs_bg_ppzksnark_proving_key<ppT>* camlsnark_bn128_bg_proving_key_of_string(std::string* s) {
+  r1cs_bg_ppzksnark_proving_key<ppT>*  pk = new r1cs_bg_ppzksnark_proving_key<ppT>();
+  std::stringstream stream(*s);
+  stream >> *pk;
+  return pk;
+}
+
+void camlsnark_bn128_bg_verification_key_delete(r1cs_bg_ppzksnark_verification_key<ppT>* vk) {
+  delete vk;
+}
+
+int camlsnark_bn128_bg_verification_key_size_in_bits(
+    r1cs_bg_ppzksnark_verification_key<ppT>* vk
+) {
+  return vk->size_in_bits();
+}
+
+std::string* camlsnark_bn128_bg_verification_key_to_string(r1cs_bg_ppzksnark_verification_key<ppT>* vk) {
+  std::stringstream stream;
+  stream << *vk;
+  return new std::string(stream.str());
+}
+
+r1cs_bg_ppzksnark_verification_key<ppT>* camlsnark_bn128_bg_verification_key_of_string(std::string* s) {
+  r1cs_bg_ppzksnark_verification_key<ppT>*  vk = new r1cs_bg_ppzksnark_verification_key<ppT>();
+  std::stringstream stream(*s);
+  stream >> *vk;
+  return vk;
+}
+
+
 r1cs_bg_ppzksnark_keypair<ppT>* camlsnark_bn128_bg_r1cs_constraint_system_create_keypair(
     r1cs_constraint_system<FieldT>* sys) {
   auto res = r1cs_bg_ppzksnark_generator<ppT>(*sys);
@@ -722,15 +781,6 @@ r1cs_bg_ppzksnark_proof<ppT>* camlsnark_bn128_bg_proof_of_string(std::string* s)
   return p;
 }
 
-r1cs_bg_ppzksnark_proof<ppT>* camlsnark_bn128_bg_proof_create(
-    r1cs_bg_ppzksnark_proving_key<ppT>* key,
-    std::vector<FieldT>* primary_input,
-    std::vector<FieldT>* auxiliary_input,
-    FieldT* d) {
-  auto res = r1cs_bg_ppzksnark_prover(*key, *primary_input, *auxiliary_input, *d);
-  return new r1cs_bg_ppzksnark_proof<ppT>(res);
-}
-
 void camlsnark_bn128_bg_proof_delete(r1cs_bg_ppzksnark_proof<ppT>* proof) {
   delete proof;
 }
@@ -743,23 +793,33 @@ bool camlsnark_bn128_bg_proof_verify(
 }
 
 
+r1cs_bg_ppzksnark_proof<ppT>* camlsnark_bn128_bg_proof_create(
+    r1cs_bg_ppzksnark_proving_key<ppT>* key,
+    std::vector<FieldT>* primary_input,
+    std::vector<FieldT>* auxiliary_input,
+    FieldT* d) {
+  auto res = r1cs_bg_ppzksnark_prover(*key, *primary_input, *auxiliary_input, *d);
+  return new r1cs_bg_ppzksnark_proof<ppT>(res);
+}
+
+
 // proof extraction functions
-libff::G1<ppT>* get_a(r1cs_bg_ppzksnark_proof<ppT>* p) {
+libff::G1<ppT>* camlsnark_bn128_bg_proof_get_a(r1cs_bg_ppzksnark_proof<ppT>* p) {
   auto a = p->g_A;
   return new libff::G1<ppT>(a);
 }
 
-libff::G2<ppT>* get_b(r1cs_bg_ppzksnark_proof<ppT>* p) {
+libff::G2<ppT>* camlsnark_bn128_bg_proof_get_b(r1cs_bg_ppzksnark_proof<ppT>* p) {
   auto b = p->g_B;
   return new libff::G2<ppT>(b);
 }
 
-libff::G1<ppT>* get_c(r1cs_bg_ppzksnark_proof<ppT>* p) {
+libff::G1<ppT>* camlsnark_bn128_bg_proof_get_c(r1cs_bg_ppzksnark_proof<ppT>* p) {
     auto c = p->g_C;
   return new libff::G1<ppT>(c);
 }
 
-libff::G2<ppT>* get_delta_prime(r1cs_bg_ppzksnark_proof<ppT>* p) {
+libff::G2<ppT>* camlsnark_bn128_bg_proof_get_delta_prime(r1cs_bg_ppzksnark_proof<ppT>* p) {
     auto delta_prime = p->g_delta_prime;
   return new libff::G2<ppT>(delta_prime);
 }

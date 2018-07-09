@@ -610,6 +610,7 @@ bool camlsnark_mnt6_proof_verify(
   return r1cs_ppzksnark_verifier_weak_IC(*key, *primary_input, *proof);
 }
 
+// vectors of field elements
 std::vector<FieldT>* camlsnark_mnt6_field_vector_create() {
   return new std::vector<FieldT>();
 }
@@ -631,60 +632,134 @@ FieldT* camlsnark_mnt6_field_vector_get(std::vector<FieldT>* v, int i) {
 void camlsnark_mnt6_field_vector_delete(std::vector<FieldT>* v) {
   delete v;
 }
-/*
-// These can't just be translated from mnt6 to mnt4 and mnt6 (i think) 
-// because the functions are actually different (mnt6 doesnt have X_, Y_ for example)
+
+// vectors of bigint_r elements
+std::vector<libff::bigint<libff::mnt6_r_limbs>>* camlsnark_mnt6_bigint_r_vector_create() {
+  return new std::vector<libff::bigint<libff::mnt6_r_limbs>>();
+}
+
+int camlsnark_mnt6_bigint_r_vector_length(std::vector<libff::bigint<libff::mnt6_r_limbs>> *v) {
+  return v->size();
+}
+
+// Not too sure what's going on here memory-wise...
+void camlsnark_mnt6_bigint_r_vector_emplace_back(std::vector<libff::bigint<libff::mnt6_r_limbs>>* v, libff::bigint<libff::mnt6_r_limbs>* x) {
+  v->emplace_back(*x);
+}
+
+libff::bigint<libff::mnt6_r_limbs>* camlsnark_mnt6_bigint_r_vector_get(std::vector<libff::bigint<libff::mnt6_r_limbs>>* v, int i) {
+  libff::bigint<libff::mnt6_q_limbs> res = (*v)[i];
+  return new libff::bigint<libff::mnt6_r_limbs>(res);
+}
+
+void camlsnark_mnt6_bigint_r_vector_delete(std::vector<libff::bigint<libff::mnt6_q_limbs>>* v) {
+  delete v;
+}
+
+
+// vectors of bigint_q elements
+std::vector<libff::bigint<libff::mnt6_q_limbs>>* camlsnark_mnt6_bigint_q_vector_create() {
+  return new std::vector<libff::bigint<libff::mnt6_q_limbs>>();
+}
+
+int camlsnark_mnt6_bigint_q_vector_length(std::vector<libff::bigint<libff::mnt6_q_limbs>> *v) {
+  return v->size();
+}
+
+// Not too sure what's going on here memory-wise...
+void camlsnark_mnt6_bigint_q_vector_emplace_back(std::vector<libff::bigint<libff::mnt6_q_limbs>>* v, libff::bigint<libff::mnt6_q_limbs>* x) {
+  v->emplace_back(*x);
+}
+
+libff::bigint<libff::mnt6_q_limbs>* camlsnark_mnt6_bigint_q_vector_get(std::vector<libff::bigint<libff::mnt6_q_limbs>>* v, int i) {
+  libff::bigint<libff::mnt6_q_limbs> res = (*v)[i];
+  return new libff::bigint<libff::mnt6_q_limbs>(res);
+}
+
+void camlsnark_mnt6_bigint_q_vector_delete(std::vector<libff::bigint<libff::mnt6_q_limbs>>* v) {
+  delete v;
+}
+
 
 // G1 functions
 void camlsnark_mnt6_g1_to_affine(libff::G1<ppT>* g) {
   g->to_affine_coordinates();
 }
 
-libff::bigint<libff::mnt6_q_limbs>*  camlsnark_mnt6_g1_get_x(libff::G1<ppT>* g) {
-  return new libff::bigint<libff::mnt6_q_limbs>(g->X().as_bigint());
-}
 
-libff::bigint<libff::mnt6_q_limbs>*  camlsnark_mnt6_g1_get_y(libff::G1<ppT>* g) {
-  return new libff::bigint<libff::mnt6_q_limbs>(g->Y().as_bigint());
-}
-
-void camlsnark_mnt6_bg_g1_delete(libff::G1<ppT>* g) {
+void camlsnark_mnt6_g1_delete(libff::G1<ppT>* g) {
   delete g;
 }
 
 // G2 functions
-
 void camlsnark_mnt6_g2_to_affine(libff::G2<ppT>* g) {
   g->to_affine_coordinates();
 }
 
-// should these not return vectors ?
-// there's no function on libff::G2 elements that's called X_ ?
-std::vector<libff::bigint<libff::mnt6_q_limbs>>*  camlsnark_mnt6_g2_get_x(libff::G2<ppT>* g) {
-  std::vector<libff::Fq<ppT>> field_elts = g->X().coordinates();
-  std::vector<libff::bigint<libff::mnt6_q_limbs>>* result = new std::vector<libff::bigint<libff::mnt6_q_limbs>>();
-  for (auto &elt : field_elts) {
-    result.push(elt.as_bigint())
-  }
-  return result;
-}
-
-// same as above...
-libff::bigint<libff::mnt6_q_limbs>*  camlsnark_mnt6_g2_get_y(libff::G2<ppT>* g) {
-  std::vector<libff::Fq<ppT>> field_elts = g->Y().coordinates();
-  std::vector<libff::bigint<libff::mnt6_q_limbs>>* result = new std::vector<libff::bigint<libff::mnt6_q_limbs>>();
-  for (auto &elt : field_elts) {
-    result.push(elt.as_bigint())
-  }
-  return result;
-  }
-
 void camlsnark_mnt6_g2_delete(libff::G2<ppT>* g) {
   delete g;
 }
-*/
 
 // Groth/Bowe-Gabizon functions
+
+
+r1cs_constraint_system<FieldT>* camlsnark_mnt6_bg_ppzksnark_proving_key_r1cs_constraint_system(
+    r1cs_bg_ppzksnark_proving_key<ppT>* pk) {
+  return &pk->constraint_system;
+}
+
+r1cs_bg_ppzksnark_proving_key<ppT>* camlsnark_mnt6_bg_keypair_pk(r1cs_bg_ppzksnark_keypair<ppT>* keypair) {
+  return new r1cs_bg_ppzksnark_proving_key<ppT>(keypair->pk);
+}
+
+r1cs_bg_ppzksnark_verification_key<ppT>* camlsnark_mnt6_bg_keypair_vk(r1cs_bg_ppzksnark_keypair<ppT>* keypair) {
+  return new r1cs_bg_ppzksnark_verification_key<ppT>(keypair->vk);
+}
+
+void camlsnark_mnt6_bg_keypair_delete(r1cs_bg_ppzksnark_keypair<ppT>* keypair) {
+  delete keypair;
+}
+
+void camlsnark_mnt6_bg_proving_key_delete(r1cs_bg_ppzksnark_proving_key<ppT>* pk) {
+  delete pk;
+}
+
+std::string* camlsnark_mnt6_bg_proving_key_to_string(r1cs_bg_ppzksnark_proving_key<ppT>* pk) {
+  std::stringstream stream;
+  stream << *pk;
+  return new std::string(stream.str());
+}
+
+r1cs_bg_ppzksnark_proving_key<ppT>* camlsnark_mnt6_bg_proving_key_of_string(std::string* s) {
+  r1cs_bg_ppzksnark_proving_key<ppT>*  pk = new r1cs_bg_ppzksnark_proving_key<ppT>();
+  std::stringstream stream(*s);
+  stream >> *pk;
+  return pk;
+}
+
+void camlsnark_mnt6_bg_verification_key_delete(r1cs_bg_ppzksnark_verification_key<ppT>* vk) {
+  delete vk;
+}
+
+int camlsnark_mnt6_bg_verification_key_size_in_bits(
+    r1cs_bg_ppzksnark_verification_key<ppT>* vk
+) {
+  return vk->size_in_bits();
+}
+
+std::string* camlsnark_mnt6_bg_verification_key_to_string(r1cs_bg_ppzksnark_verification_key<ppT>* vk) {
+  std::stringstream stream;
+  stream << *vk;
+  return new std::string(stream.str());
+}
+
+r1cs_bg_ppzksnark_verification_key<ppT>* camlsnark_mnt6_bg_verification_key_of_string(std::string* s) {
+  r1cs_bg_ppzksnark_verification_key<ppT>*  vk = new r1cs_bg_ppzksnark_verification_key<ppT>();
+  std::stringstream stream(*s);
+  stream >> *vk;
+  return vk;
+}
+
 
 r1cs_bg_ppzksnark_keypair<ppT>* camlsnark_mnt6_bg_r1cs_constraint_system_create_keypair(
     r1cs_constraint_system<FieldT>* sys) {
@@ -706,15 +781,6 @@ r1cs_bg_ppzksnark_proof<ppT>* camlsnark_mnt6_bg_proof_of_string(std::string* s) 
   return p;
 }
 
-r1cs_bg_ppzksnark_proof<ppT>* camlsnark_mnt6_bg_proof_create(
-    r1cs_bg_ppzksnark_proving_key<ppT>* key,
-    std::vector<FieldT>* primary_input,
-    std::vector<FieldT>* auxiliary_input,
-    FieldT* d) {
-  auto res = r1cs_bg_ppzksnark_prover(*key, *primary_input, *auxiliary_input, *d);
-  return new r1cs_bg_ppzksnark_proof<ppT>(res);
-}
-
 void camlsnark_mnt6_bg_proof_delete(r1cs_bg_ppzksnark_proof<ppT>* proof) {
   delete proof;
 }
@@ -726,5 +792,36 @@ bool camlsnark_mnt6_bg_proof_verify(
   return r1cs_bg_ppzksnark_verifier_weak_IC(*key, *primary_input, *proof);
 }
 
+
+r1cs_bg_ppzksnark_proof<ppT>* camlsnark_mnt6_bg_proof_create(
+    r1cs_bg_ppzksnark_proving_key<ppT>* key,
+    std::vector<FieldT>* primary_input,
+    std::vector<FieldT>* auxiliary_input,
+    FieldT* d) {
+  auto res = r1cs_bg_ppzksnark_prover(*key, *primary_input, *auxiliary_input, *d);
+  return new r1cs_bg_ppzksnark_proof<ppT>(res);
+}
+
+
+// proof extraction functions
+libff::G1<ppT>* camlsnark_mnt6_bg_proof_get_a(r1cs_bg_ppzksnark_proof<ppT>* p) {
+  auto a = p->g_A;
+  return new libff::G1<ppT>(a);
+}
+
+libff::G2<ppT>* camlsnark_mnt6_bg_proof_get_b(r1cs_bg_ppzksnark_proof<ppT>* p) {
+  auto b = p->g_B;
+  return new libff::G2<ppT>(b);
+}
+
+libff::G1<ppT>* camlsnark_mnt6_bg_proof_get_c(r1cs_bg_ppzksnark_proof<ppT>* p) {
+    auto c = p->g_C;
+  return new libff::G1<ppT>(c);
+}
+
+libff::G2<ppT>* camlsnark_mnt6_bg_proof_get_delta_prime(r1cs_bg_ppzksnark_proof<ppT>* p) {
+    auto delta_prime = p->g_delta_prime;
+  return new libff::G2<ppT>(delta_prime);
+}
 
 }

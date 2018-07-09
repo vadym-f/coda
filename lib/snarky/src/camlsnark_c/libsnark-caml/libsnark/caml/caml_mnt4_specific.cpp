@@ -6,9 +6,6 @@ using namespace libsnark;
 
 
 // G1 functions
-void camlsnark_mnt4_g1_to_affine(libff::G1<ppT>* g) {
-  g->to_affine_coordinates();
-}
 
 libff::bigint<libff::mnt4_q_limbs>*  camlsnark_mnt4_g1_get_x(libff::G1<ppT>* g) {
   return new libff::bigint<libff::mnt4_q_limbs>(g->X().as_bigint());
@@ -18,15 +15,8 @@ libff::bigint<libff::mnt4_q_limbs>*  camlsnark_mnt4_g1_get_y(libff::G1<ppT>* g) 
   return new libff::bigint<libff::mnt4_q_limbs>(g->Y().as_bigint());
 }
 
-void camlsnark_mnt4_g1_delete(libff::G1<ppT>* g) {
-  delete g;
-}
 
 // G2 functions
-
-void camlsnark_mnt4_g2_to_affine(libff::G2<ppT>* g) {
-  g->to_affine_coordinates();
-}
 
 std::vector<libff::bigint<libff::mnt4_q_limbs>>*  camlsnark_mnt4_g2_get_x(libff::G2<ppT>* g) {
   std::vector<libff::Fq<ppT>> field_elts = g->X().coordinates();
@@ -37,7 +27,6 @@ std::vector<libff::bigint<libff::mnt4_q_limbs>>*  camlsnark_mnt4_g2_get_x(libff:
   return result;
 }
 
-
 std::vector<libff::bigint<libff::mnt4_q_limbs>>*  camlsnark_mnt4_g2_get_y(libff::G2<ppT>* g) {
   std::vector<libff::Fq<ppT>> field_elts = g->Y().coordinates();
   std::vector<libff::bigint<libff::mnt4_q_limbs>>* result = new std::vector<libff::bigint<libff::mnt4_q_limbs>>();
@@ -46,10 +35,6 @@ std::vector<libff::bigint<libff::mnt4_q_limbs>>*  camlsnark_mnt4_g2_get_y(libff:
   }
   return result;
   }
-
-void camlsnark_mnt4_g2_delete(libff::G2<ppT>* g) {
-  delete g;
-}
 
 
 // verification key

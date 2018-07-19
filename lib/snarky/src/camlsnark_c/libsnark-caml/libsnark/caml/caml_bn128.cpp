@@ -390,9 +390,22 @@ linear_term<FieldT>* camlsnark_bn128_linear_combination_term_vector_get(std::vec
   return new linear_term<FieldT>(res);
 }
 
+
+
+/* // also move to keypair (particularly 'proving_key') land
 r1cs_constraint_system<FieldT>* camlsnark_bn128_proving_key_r1cs_constraint_system(
     r1cs_ppzksnark_proving_key<ppT>* pk) {
   return &pk->constraint_system;
+}
+*/
+
+r1cs_constraint_system<FieldT>* camlsnark_bn128_proving_key_r1cs_constraint_system(r1cs_ppzksnark_proving_key<ppT>* pk) {
+  return &pk->constraint_system;
+}
+
+r1cs_ppzksnark_keypair<ppT>* camlsnark_bn128_keypair_create(r1cs_constraint_system<FieldT>* sys) {
+  auto res = r1cs_ppzksnark_generator<ppT>(*sys);
+  return new r1cs_ppzksnark_keypair<ppT>(res);
 }
 
 r1cs_ppzksnark_proving_key<ppT>* camlsnark_bn128_keypair_pk(r1cs_ppzksnark_keypair<ppT>* keypair) {
@@ -571,12 +584,13 @@ int camlsnark_bn128_r1cs_constraint_system_get_auxiliary_input_size(
   return sys->auxiliary_input_size;
 }
 
+/* // relocated 
 r1cs_ppzksnark_keypair<ppT>* camlsnark_bn128_r1cs_constraint_system_create_keypair(
     r1cs_constraint_system<FieldT>* sys) {
   auto res = r1cs_ppzksnark_generator<ppT>(*sys);
   return new r1cs_ppzksnark_keypair<ppT>(res);
 }
-
+*/ 
 std::string* camlsnark_bn128_proof_to_string(
     r1cs_ppzksnark_proof<ppT>* p) {
   std::stringstream stream;
@@ -680,12 +694,10 @@ void camlsnark_bn128_bigint_q_vector_delete(std::vector<libff::bigint<libff::bn1
   delete v;
 }
 
-
 // G1 functions
 void camlsnark_bn128_g1_to_affine(libff::G1<ppT>* g) {
   g->to_affine_coordinates();
 }
-
 
 void camlsnark_bn128_g1_delete(libff::G1<ppT>* g) {
   delete g;
@@ -760,8 +772,8 @@ r1cs_bg_ppzksnark_verification_key<ppT>* camlsnark_bn128_bg_verification_key_of_
   return vk;
 }
 
-
-r1cs_bg_ppzksnark_keypair<ppT>* camlsnark_bn128_bg_r1cs_constraint_system_create_keypair(
+// changed name to keypair_create
+r1cs_bg_ppzksnark_keypair<ppT>* camlsnark_bn128_bg_keypair_create(
     r1cs_constraint_system<FieldT>* sys) {
   auto res = r1cs_bg_ppzksnark_generator<ppT>(*sys);
   return new r1cs_bg_ppzksnark_keypair<ppT>(res);

@@ -15,6 +15,11 @@ libff::bigint<libff::mnt4_q_limbs>*  camlsnark_mnt4_g1_get_y(libff::G1<ppT>* g) 
   return new libff::bigint<libff::mnt4_q_limbs>(g->Y().as_bigint());
 }
 
+libff::G1<ppT>* camlsnark_mnt4_g1_of_field(libff::bigint<libff::mnt4_r_limbs>* k) {
+  libff::G1<ppT>* g = new libff::G1<ppT>();
+  g->one();
+  return new libff::G1<ppT>(*k * *g);
+}
 
 // G2 functions
 
@@ -35,7 +40,6 @@ std::vector<libff::bigint<libff::mnt4_q_limbs>>*  camlsnark_mnt4_g2_get_y(libff:
   }
   return result;
   }
-
 
 // verification key
 
@@ -70,6 +74,7 @@ std::vector<FieldT>* camlsnark_mnt4_verification_key_other_to_field_vector(
 }
 
 // verification key variable
+
 r1cs_ppzksnark_verification_key_variable<ppT>* camlsnark_mnt4_r1cs_ppzksnark_verification_key_variable_create(
     protoboard<FieldT>* pb,
     pb_variable_array<FieldT>* all_bits,
@@ -98,6 +103,7 @@ void camlsnark_mnt4_r1cs_ppzksnark_verification_key_variable_generate_r1cs_witne
 }
 
 // proof variable
+
 r1cs_ppzksnark_proof_variable<ppT>* camlsnark_mnt4_r1cs_ppzksnark_proof_variable_create(
     protoboard<FieldT>* pb) {
   return new r1cs_ppzksnark_proof_variable<ppT>(*pb, "proof_variable");
@@ -119,7 +125,8 @@ void camlsnark_mnt4_r1cs_ppzksnark_proof_variable_generate_r1cs_witness(
   pv->generate_r1cs_witness(*p);
 }
 
-// verifier
+// verifier gadget
+
 r1cs_ppzksnark_verifier_gadget<ppT>* camlsnark_mnt4_r1cs_ppzksnark_verifier_gadget_create(
     protoboard<FieldT>* pb,
     r1cs_ppzksnark_verification_key_variable<ppT>* vk,

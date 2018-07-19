@@ -14,7 +14,7 @@ module type Deletable_intf = sig
   val delete : t -> unit
 end
 
-module Make (M : sig
+module Make_common (M : sig
   val prefix : string
 end) =
 struct
@@ -212,6 +212,150 @@ struct
         Unsigned.Size_t.to_int r
   end
 
+
+  module Bigint : sig
+    module R : sig
+      type t
+
+      val typ : t Ctypes.typ
+
+      val of_decimal_string : string -> t
+
+      val of_numeral : string -> base:int -> t
+
+      val of_field : Field.t -> t
+
+      val div : t -> t -> t
+
+      val to_field : t -> Field.t
+
+      val compare : t -> t -> int
+
+      val test_bit : t -> int -> bool
+
+      val find_wnaf : Unsigned.Size_t.t -> t -> Long_vector.t
+      (* we actually dont need this (yet?)*)
+      module Vector : Vector.S with type elt = t  
+    end
+
+    module Q : sig
+      type t
+
+      val delete : t -> unit
+
+      val typ : t Ctypes.typ
+
+      val test_bit : t -> int -> bool
+
+      val find_wnaf : Unsigned.Size_t.t -> t -> Long_vector.t
+
+      module Vector : Vector.S with type elt = t
+    end
+    end
+    = struct
+  
+    module Common (N : sig
+      val prefix : string
+    end) =
+    struct
+      type t = unit ptr
+
+      let typ = ptr void
+
+      let prefix = with_prefix (with_prefix M.prefix "bigint") N.prefix
+
+      let func_name =
+        with_prefix prefix
+
+      let delete = foreign (func_name "delete") (typ @-> returning void)
+
+      let test_bit =
+        foreign (func_name "test_bit") (typ @-> int @-> returning bool)
+
+      let find_wnaf =
+        let stub =
+          foreign (func_name "find_wnaf")
+            (size_t @-> typ @-> returning Long_vector.typ)
+        in
+        fun x y ->
+          let v = stub x y in
+          Caml.Gc.finalise Long_vector.delete v ;
+          v
+
+        module Vector = Vector.Make(struct
+        type elt = t
+        let typ = typ
+        let prefix = with_prefix prefix "vector"
+        end)
+    end
+
+    module R = struct
+      let prefix = "r"
+
+      include Common (struct
+        let prefix = prefix
+      end)
+
+      let func_name = with_prefix prefix
+
+      let div =
+        let stub = foreign (func_name "div") (typ @-> typ @-> returning typ) in
+        fun x y ->
+          let z = stub x y in
+          Caml.Gc.finalise delete z ; z
+
+      let of_numeral =
+        let stub =
+          foreign (func_name "of_numeral")
+            (string @-> int @-> int @-> returning typ)
+        in
+        fun s ~base ->
+          let n = stub s (String.length s) base in
+          Caml.Gc.finalise delete n ; n
+
+      let of_decimal_string =
+        let stub =
+          foreign (func_name "of_decimal_string") (string @-> returning typ)
+        in
+        fun s ->
+          let n = stub s in
+          Caml.Gc.finalise delete n ; n
+
+      let compare =
+        foreign (func_name "compare") (typ @-> typ @-> returning int)
+
+      let of_field =
+        let stub =
+          foreign (func_name "of_field") (Field.typ @-> returning typ)
+        in
+        fun x ->
+          let n = stub x in
+          Caml.Gc.finalise delete n ; n
+
+      let to_field =
+        let stub =
+          foreign (func_name "to_field") (typ @-> returning Field.typ)
+        in
+        fun n ->
+          let x = stub n in
+          Caml.Gc.finalise Field.delete x ;
+          x
+    end
+
+    module Q = Common (struct
+      let prefix = "q"
+    end)
+  end
+
+  let field_size =
+    let stub =
+      foreign
+        (with_prefix M.prefix "field_size")
+        (void @-> returning Bigint.R.typ)
+    in
+    stub ()
+
+
   module Linear_combination : sig
     type t
 
@@ -345,203 +489,6 @@ struct
         @-> Linear_combination.typ @-> returning typ )
   end
 
-  module Make_verification_key
-    (Prefix : sig val prefix : string end)
-   : sig
-    type t
-
-    val typ : t Ctypes.typ
-
-    val delete : t -> unit
-
-    val to_string : t -> string
-
-    val of_string : string -> t
-
-    val to_bigstring : t -> Bigstring.t
-
-    val of_bigstring : Bigstring.t -> t
-
-    val size_in_bits : t -> int
-  end = struct
-  
-    type t = unit ptr
-
-    let typ = ptr void
-
-    open Prefix
-
-    let func_name = with_prefix prefix
-
-    let delete = foreign (func_name "delete") (typ @-> returning void)
-
-    let size_in_bits =
-      foreign (func_name "size_in_bits") (typ @-> returning int)
-
-    let to_string : t -> string =
-      let stub =
-        foreign (func_name "to_string") (typ @-> returning Cpp_string.typ)
-      in
-      fun t ->
-        let s = stub t in
-        let r = Cpp_string.to_string s in
-        Cpp_string.delete s ; r
-
-    let of_string : string -> t =
-      let stub =
-        foreign (func_name "of_string") (Cpp_string.typ @-> returning typ)
-      in
-      fun s ->
-        let str = Cpp_string.of_string_don't_delete s in
-        let t = stub str in
-        Cpp_string.delete str ; t
-
-    let to_bigstring : t -> Bigstring.t =
-      let stub =
-        foreign (func_name "to_string") (typ @-> returning Cpp_string.typ)
-      in
-      fun t ->
-        let str = stub t in
-        let length = Cpp_string.length str in
-        let char_star = Cpp_string.to_char_pointer str in
-        let bs =
-          Ctypes.bigarray_of_ptr Ctypes.array1 length Bigarray.Char char_star
-        in
-        Caml.Gc.finalise (fun _ -> Cpp_string.delete str) bs ;
-        bs
-
-    let of_bigstring : Bigstring.t -> t =
-      let stub =
-        foreign (func_name "of_string") (Cpp_string.typ @-> returning typ)
-      in
-      fun bs ->
-        let char_star = Ctypes.bigarray_start Ctypes.array1 bs in
-        let str =
-          Cpp_string.of_char_pointer_don't_delete char_star
-            (Bigstring.length bs)
-        in
-        let t = stub str in
-        Caml.Gc.finalise (fun _ -> delete t) t ;
-        t
-  end
-
-  module Verification_key = Make_verification_key(struct let prefix = with_prefix M.prefix "verification_key" end)
-
-  module Make_proving_key (M : sig val prefix : string end) : sig
-    type t
-
-    val typ : t Ctypes.typ
-
-    val delete : t -> unit
-
-    val to_string : t -> string
-
-    val of_string : string -> t
-
-    val to_bigstring : t -> Bigstring.t
-
-    val of_bigstring : Bigstring.t -> t
-  end = struct
-    open M
-
-    type t = unit ptr
-
-    let typ = ptr void
-
-    let func_name = with_prefix prefix
-
-    let delete = foreign (with_prefix prefix "delete") (typ @-> returning void)
-
-    let to_string : t -> string =
-      let stub =
-        foreign (func_name "to_string") (typ @-> returning Cpp_string.typ)
-      in
-      fun t ->
-        let s = stub t in
-        let r = Cpp_string.to_string s in
-        Cpp_string.delete s ; r
-
-    let of_string : string -> t =
-      let stub =
-        foreign (func_name "of_string") (Cpp_string.typ @-> returning typ)
-      in
-      fun s ->
-        let str = Cpp_string.of_string_don't_delete s in
-        let t = stub str in
-        Cpp_string.delete str ; t
-
-    let to_bigstring : t -> Bigstring.t =
-      let stub =
-        foreign (func_name "to_string") (typ @-> returning Cpp_string.typ)
-      in
-      fun t ->
-        let str = stub t in
-        let length = Cpp_string.length str in
-        let char_star = Cpp_string.to_char_pointer str in
-        let bs =
-          Ctypes.bigarray_of_ptr Ctypes.array1 length Bigarray.Char char_star
-        in
-        Caml.Gc.finalise (fun _ -> Cpp_string.delete str) bs ;
-        bs
-
-    let of_bigstring : Bigstring.t -> t =
-      let stub =
-        foreign (func_name "of_string") (Cpp_string.typ @-> returning typ)
-      in
-      fun bs ->
-        let char_star = Ctypes.bigarray_start Ctypes.array1 bs in
-        let str =
-          Cpp_string.of_char_pointer_don't_delete char_star
-            (Bigstring.length bs)
-        in
-        let t = stub str in
-        Caml.Gc.finalise (fun _ -> delete t) t ;
-        t
-  end
-
-  module Proving_key0 = Make_proving_key(struct let prefix = with_prefix M.prefix "proving_key" end)
-
-  module Make_keypair
-    (Prefix : sig val prefix : string end)
-    (Proving_key : Deletable_intf)
-    (Verification_key : Deletable_intf) : sig 
-    include Deletable_intf
-
-    val pk : t -> Proving_key.t
-
-    val vk : t -> Verification_key.t
-  end = struct
-    type t = unit ptr
-
-    let typ = ptr void
-
-    open Prefix
-
-    let func_name s = with_prefix prefix s
-
-    let delete = foreign (func_name "delete") (typ @-> returning void)
-
-    let pk =
-      let stub =
-        foreign (func_name "pk") (typ @-> returning Proving_key.typ)
-      in
-      fun t ->
-        let k = stub t in
-        Caml.Gc.finalise Proving_key.delete k ;
-        k
-
-    let vk =
-      let stub =
-        foreign (func_name "vk") (typ @-> returning Verification_key.typ)
-      in
-      fun t ->
-        let k = stub t in
-        Caml.Gc.finalise Verification_key.delete k ;
-        k
-  end
-
-  module Keypair = Make_keypair(struct let prefix = with_prefix M.prefix "keypair" end)(Proving_key0)(Verification_key)
-
   module R1CS_constraint_system : sig
     type t
 
@@ -566,7 +513,7 @@ struct
 
     val get_auxiliary_input_size : t -> int
 
-    val create_keypair : t -> Keypair.t
+    (* val create_keypair : t -> Keypair.t *)
 
     val check_exn : t -> unit
 
@@ -636,7 +583,7 @@ struct
       in
       fun t ~primary_input ~auxiliary_input ->
         stub t primary_input auxiliary_input
-
+(*
     let create_keypair =
       let stub =
         foreign (func_name "create_keypair") (typ @-> returning Keypair.typ)
@@ -645,7 +592,7 @@ struct
         let keypair = stub t in
         Caml.Gc.finalise Keypair.delete keypair ;
         keypair
-
+*)
     let digest =
       let stub =
         foreign (func_name "digest") (typ @-> returning Cpp_string.typ)
@@ -832,229 +779,320 @@ struct
         Caml.Gc.finalise Field.Vector.delete v ;
         v
   end
+end
+module Make_verification_key
+  (Prefix : sig val prefix : string end)
+  : sig
+  type t
 
-  module Proving_key = struct
-    include Proving_key0
+  val typ : t Ctypes.typ
 
-    let r1cs_constraint_system =
-      foreign
-        (with_prefix M.prefix "proving_key_r1cs_constraint_system")
-        (typ @-> returning R1CS_constraint_system.typ)
-  end
+  val delete : t -> unit
 
-  module Proof : sig
+  val to_string : t -> string
+
+  val of_string : string -> t
+
+  val to_bigstring : t -> Bigstring.t
+
+  val of_bigstring : Bigstring.t -> t
+
+  val size_in_bits : t -> int
+end = struct
+
+  type t = unit ptr
+
+  let typ = ptr void
+
+  open Prefix
+
+  let func_name = with_prefix prefix
+
+  let delete = foreign (func_name "delete") (typ @-> returning void)
+
+  let size_in_bits =
+    foreign (func_name "size_in_bits") (typ @-> returning int)
+
+  let to_string : t -> string =
+    let stub =
+      foreign (func_name "to_string") (typ @-> returning Cpp_string.typ)
+    in
+    fun t ->
+      let s = stub t in
+      let r = Cpp_string.to_string s in
+      Cpp_string.delete s ; r
+
+  let of_string : string -> t =
+    let stub =
+      foreign (func_name "of_string") (Cpp_string.typ @-> returning typ)
+    in
+    fun s ->
+      let str = Cpp_string.of_string_don't_delete s in
+      let t = stub str in
+      Cpp_string.delete str ; t
+
+  let to_bigstring : t -> Bigstring.t =
+    let stub =
+      foreign (func_name "to_string") (typ @-> returning Cpp_string.typ)
+    in
+    fun t ->
+      let str = stub t in
+      let length = Cpp_string.length str in
+      let char_star = Cpp_string.to_char_pointer str in
+      let bs =
+        Ctypes.bigarray_of_ptr Ctypes.array1 length Bigarray.Char char_star
+      in
+      Caml.Gc.finalise (fun _ -> Cpp_string.delete str) bs ;
+      bs
+
+  let of_bigstring : Bigstring.t -> t =
+    let stub =
+      foreign (func_name "of_string") (Cpp_string.typ @-> returning typ)
+    in
+    fun bs ->
+      let char_star = Ctypes.bigarray_start Ctypes.array1 bs in
+      let str =
+        Cpp_string.of_char_pointer_don't_delete char_star
+          (Bigstring.length bs)
+      in
+      let t = stub str in
+      Caml.Gc.finalise (fun _ -> delete t) t ;
+      t
+end
+
+module Make_proving_key 
+(R1CS_constraint_system : Foreign_intf)
+(M : sig val prefix : string end) : sig
+  type t
+
+  val typ : t Ctypes.typ
+
+  val delete : t -> unit
+
+  val to_string : t -> string
+
+  val of_string : string -> t
+
+  val to_bigstring : t -> Bigstring.t
+
+  val of_bigstring : Bigstring.t -> t
+end = struct
+  open M
+
+  type t = unit ptr
+
+  let typ = ptr void
+
+  let func_name = with_prefix prefix
+
+  let delete = foreign (with_prefix prefix "delete") (typ @-> returning void)
+
+  let to_string : t -> string =
+    let stub =
+      foreign (func_name "to_string") (typ @-> returning Cpp_string.typ)
+    in
+    fun t ->
+      let s = stub t in
+      let r = Cpp_string.to_string s in
+      Cpp_string.delete s ; r
+
+  let of_string : string -> t =
+    let stub =
+      foreign (func_name "of_string") (Cpp_string.typ @-> returning typ)
+    in
+    fun s ->
+      let str = Cpp_string.of_string_don't_delete s in
+      let t = stub str in
+      Cpp_string.delete str ; t
+
+  let to_bigstring : t -> Bigstring.t =
+    let stub =
+      foreign (func_name "to_string") (typ @-> returning Cpp_string.typ)
+    in
+    fun t ->
+      let str = stub t in
+      let length = Cpp_string.length str in
+      let char_star = Cpp_string.to_char_pointer str in
+      let bs =
+        Ctypes.bigarray_of_ptr Ctypes.array1 length Bigarray.Char char_star
+      in
+      Caml.Gc.finalise (fun _ -> Cpp_string.delete str) bs ;
+      bs
+
+  let of_bigstring : Bigstring.t -> t =
+    let stub =
+      foreign (func_name "of_string") (Cpp_string.typ @-> returning typ)
+    in
+    fun bs ->
+      let char_star = Ctypes.bigarray_start Ctypes.array1 bs in
+      let str =
+        Cpp_string.of_char_pointer_don't_delete char_star
+          (Bigstring.length bs)
+      in
+      let t = stub str in
+      Caml.Gc.finalise (fun _ -> delete t) t ;
+      t
+
+  let r1cs_constraint_system =
+    foreign (func_name "proving_key_r1cs_constraint_system")
+      (typ @-> returning R1CS_constraint_system.typ)
+end
+
+
+module Make_keys
+  (R1CS_constraint_system : sig 
     type t
-
     val typ : t Ctypes.typ
+  end)
+ (Prefix : sig val prefix : string end) 
+ = struct
 
-    val create :
-      Proving_key.t -> primary:Field.Vector.t -> auxiliary:Field.Vector.t -> t
+  module Proving_key = Make_proving_key(R1CS_constraint_system)(struct 
+  let prefix = with_prefix Prefix.prefix "proving_key" end)
 
-    val verify : t -> Verification_key.t -> Field.Vector.t -> bool
+  module Verification_key = Make_verification_key(struct 
+  let prefix = with_prefix Prefix.prefix "verification_key" end)
 
-    val to_string : t -> string
+  module Make_keypair
+    (Prefix : sig val prefix : string end)
+    (Proving_key : Deletable_intf)
+    (Verification_key : Deletable_intf) : sig 
+    include Deletable_intf
 
-    val of_string : string -> t
+    val pk : t -> Proving_key.t
+
+    val vk : t -> Verification_key.t
   end = struct
     type t = unit ptr
 
     let typ = ptr void
 
-    let prefix = with_prefix M.prefix "proof"
+    open Prefix
 
-    let func_name = with_prefix prefix
+    let func_name s = with_prefix prefix s
 
     let delete = foreign (func_name "delete") (typ @-> returning void)
 
-    let to_string : t -> string =
+    let create =
       let stub =
-        foreign (func_name "to_string") (typ @-> returning Cpp_string.typ)
+        foreign (func_name "create") (R1CS_constraint_system.typ @-> returning typ)
       in
       fun t ->
-        let s = stub t in
-        let r = Cpp_string.to_string s in
-        Cpp_string.delete s ; r
+        let keypair = stub t in
+        Caml.Gc.finalise delete keypair ;
+        keypair
 
-    let of_string : string -> t =
+    let pk =
       let stub =
-        foreign (func_name "of_string") (Cpp_string.typ @-> returning typ)
+        foreign (func_name "pk") (typ @-> returning Proving_key.typ)
       in
-      fun s ->
-        let str = Cpp_string.of_string_don't_delete s in
-        let t = stub str in
-        Cpp_string.delete str ; t
+      fun t ->
+        let k = stub t in
+        Caml.Gc.finalise Proving_key.delete k ;
+        k
 
-    let create_ =
+    let vk =
       let stub =
-        foreign (func_name "create")
-          ( Proving_key.typ @-> Field.Vector.typ @-> Field.Vector.typ
-          @-> returning typ )
+        foreign (func_name "vk") (typ @-> returning Verification_key.typ)
       in
-      fun k primary auxiliary ->
-        let t = stub k primary auxiliary in
-        Caml.Gc.finalise delete t ; t
-
-    let create key ~primary ~auxiliary = create_ key primary auxiliary
-
-    let verify =
-      foreign (func_name "verify")
-        (typ @-> Verification_key.typ @-> Field.Vector.typ @-> returning bool)
+      fun t ->
+        let k = stub t in
+        Caml.Gc.finalise Verification_key.delete k ;
+        k
   end
-
-
-  module Bigint : sig
-    module R : sig
-      type t
-
-      val typ : t Ctypes.typ
-
-      val of_decimal_string : string -> t
-
-      val of_numeral : string -> base:int -> t
-
-      val of_field : Field.t -> t
-
-      val div : t -> t -> t
-
-      val to_field : t -> Field.t
-
-      val compare : t -> t -> int
-
-      val test_bit : t -> int -> bool
-
-      val find_wnaf : Unsigned.Size_t.t -> t -> Long_vector.t
-      (* we actually dont need this (yet?)*)
-      module Vector : Vector.S with type elt = t  
-    end
-
-    module Q : sig
-      type t
-
-      val delete : t -> unit
-
-      val typ : t Ctypes.typ
-
-      val test_bit : t -> int -> bool
-
-      val find_wnaf : Unsigned.Size_t.t -> t -> Long_vector.t
-
-      module Vector : Vector.S with type elt = t
-    end
-    end
-    = struct
-  
-    module Common (N : sig
-      val prefix : string
-    end) =
-    struct
-      type t = unit ptr
-
-      let typ = ptr void
-
-      let prefix = with_prefix (with_prefix M.prefix "bigint") N.prefix
-
-      let func_name =
-        with_prefix prefix
-
-      let delete = foreign (func_name "delete") (typ @-> returning void)
-
-      let test_bit =
-        foreign (func_name "test_bit") (typ @-> int @-> returning bool)
-
-      let find_wnaf =
-        let stub =
-          foreign (func_name "find_wnaf")
-            (size_t @-> typ @-> returning Long_vector.typ)
-        in
-        fun x y ->
-          let v = stub x y in
-          Caml.Gc.finalise Long_vector.delete v ;
-          v
-
-        module Vector = Vector.Make(struct
-        type elt = t
-        let typ = typ
-        let prefix = with_prefix prefix "vector"
-        end)
-    end
-
-    module R = struct
-      let prefix = "r"
-
-      include Common (struct
-        let prefix = prefix
-      end)
-
-      let func_name = with_prefix prefix
-
-      let div =
-        let stub = foreign (func_name "div") (typ @-> typ @-> returning typ) in
-        fun x y ->
-          let z = stub x y in
-          Caml.Gc.finalise delete z ; z
-
-      let of_numeral =
-        let stub =
-          foreign (func_name "of_numeral")
-            (string @-> int @-> int @-> returning typ)
-        in
-        fun s ~base ->
-          let n = stub s (String.length s) base in
-          Caml.Gc.finalise delete n ; n
-
-      let of_decimal_string =
-        let stub =
-          foreign (func_name "of_decimal_string") (string @-> returning typ)
-        in
-        fun s ->
-          let n = stub s in
-          Caml.Gc.finalise delete n ; n
-
-      let compare =
-        foreign (func_name "compare") (typ @-> typ @-> returning int)
-
-      let of_field =
-        let stub =
-          foreign (func_name "of_field") (Field.typ @-> returning typ)
-        in
-        fun x ->
-          let n = stub x in
-          Caml.Gc.finalise delete n ; n
-
-      let to_field =
-        let stub =
-          foreign (func_name "to_field") (typ @-> returning Field.typ)
-        in
-        fun n ->
-          let x = stub n in
-          Caml.Gc.finalise Field.delete x ;
-          x
-    end
-
-    module Q = Common (struct
-      let prefix = "q"
-    end)
-  end
-
 end
 
-module Bn128 = Make (struct
+module Make_ppzksnark_proof
+(Field : sig 
+  module Vector : sig
+    type t
+  end
+end)
+(Proving_key : Foreign_intf)
+(Verification_key : Foreign_intf)
+(Prefix : sig val prefix : string end)  : sig
+  type t
+
+  val typ : t Ctypes.typ
+
+  val create :
+    Proving_key.t -> primary:Field.Vector.t -> auxiliary:Field.Vector.t -> t
+
+  val verify : t -> Verification_key.t -> Field.Vector.t -> bool
+
+  val to_string : t -> string
+
+  val of_string : string -> t
+end = struct
+  let prefix = with_prefix Prefix.prefix "proof"
+
+  type t = unit ptr
+
+  let typ = ptr void
+
+  let func_name = with_prefix prefix
+
+  let delete = foreign (func_name "delete") (typ @-> returning void)
+
+  let to_string : t -> string =
+    let stub =
+      foreign (func_name "to_string") (typ @-> returning Cpp_string.typ)
+    in
+    fun t ->
+      let s = stub t in
+      let r = Cpp_string.to_string s in
+      Cpp_string.delete s ; r
+
+  let of_string : string -> t =
+    let stub =
+      foreign (func_name "of_string") (Cpp_string.typ @-> returning typ)
+    in
+    fun s ->
+      let str = Cpp_string.of_string_don't_delete s in
+      let t = stub str in
+      Cpp_string.delete str ; t
+
+  let create_ =
+    let stub =
+      foreign (func_name "create")
+        ( Proving_key.typ @-> Field.Vector.typ @-> Field.Vector.typ
+        @-> returning typ )
+    in
+    fun k primary auxiliary ->
+      let t = stub k primary auxiliary in
+      Caml.Gc.finalise delete t ; t
+
+  let create key ~primary ~auxiliary = create_ key primary auxiliary
+
+  let verify =
+    foreign (func_name "verify")
+      (typ @-> Verification_key.typ @-> Field.Vector.typ @-> returning bool)
+end
+
+
+module Bn128_common = Make_common (struct
   let prefix = "camlsnark_bn128"
 end)
 
-module Make_mnt (M : sig val prefix : string end) = struct 
-  include Make(M)
+module Bn128_ppzksnark = struct
+  include Bn128_common
+
+  include Make_keys(struct let prefix = prefix end)
+  module Proof = Make_ppzksnark_proof(struct let prefix = prefix end)
+end
+
+module Make_mnt_common (M : sig val prefix : string end) = struct 
+  include Make_common(M)
   open M
 
-  module G1 = struct 
-    type t = unit ptr
+    module G1 = struct
 
     let prefix = with_prefix prefix "g1"
 
     let typ = ptr void
 
     let delete = foreign (with_prefix prefix "delete") (typ @-> returning void)
-
+    
     let to_affine : t -> unit =
       foreign (with_prefix prefix "to_affine")
         (typ @-> returning void)
@@ -1068,6 +1106,10 @@ module Make_mnt (M : sig val prefix : string end) = struct
         let x = stub g in
         Caml.Gc.finalise Bigint.Q.delete x;
         x
+
+    let of_field : Bigint.R.t -> G1.t =
+      foreign (with_prefix prefix "of_field")
+        (Bigint.R.typ @-> returning typ)
     
     let get_y : t -> Bigint.Q.t =
       let stub =
@@ -1113,61 +1155,126 @@ module Make_mnt (M : sig val prefix : string end) = struct
         let y = stub g in
         Caml.Gc.finalise Bigint.Q.Vector.delete y;
         y
+    end   
+end
+
+module type S = module type of Bn128
+
+module Mnt6_common =
+  Make_mnt_common(struct let prefix = "camlsnark_mnt6" end)
+
+module Mnt4_common = 
+  Make_mnt_common(struct let prefix = "camlsnark_mnt4" end)
+
+
+    (* high level plan: 
+    - [ ] finish BG snark
+    - [ ] then try GM snark
+
+    Plan for BG snark
+    - [ ] implement the Backend_intf with bg snark
+      - [x] separate Make into
+        - [x] Make_common
+        - [x] everything but Proving_key, Verification_key, Proof
+      - [x] Make_ppzksnark
+          - [x] includes Make_common
+          - [x] adds Proving_key, Verification_key, Proof
+      - [x] Make_bg_ppzksnark
+          - [x] includes Make_common
+          - [x] defines Proving_key, Verification_key, Proof_partial
+            - [x] defines Proof
+              - [x] type t =  { partial : Partial_proof.t ; z : G1.t }
+              - [x] verify calls Proof_partial.verify and does hashing
+              - [x] create (i.e., really_make_proof) calls Proof_partial.create and sticsk in the other hash stuff
+    *)
+
+module Make_ppzksnark
+  (M : sig val prefix : string end)
+  = struct 
+  module Common = Make_common(M)
+  include Common
+
+  let prefix = with_prefix M.prefix "ppzksnark"
+  module Keys = Make_keys(struct let prefix = prefix end)
+  include Keys
+end
+
+module Common_intf : sig 
+  val prefix : string
+  module Field : sig
+    type t
+    val typ : t Ctypes.typ
+    val random : unit -> t
+
+    module Vector : sig 
+      type t
+      val typ : t Ctype.typ
+    end
   end
 
+  module Bigint : sig 
+    module Q : sig
+      type t
 
-  let field_size =
-    let stub =
-      foreign
-        (with_prefix M.prefix "field_size")
-        (void @-> returning Bigint.R.typ)
-    in
-    stub ()
+      val size_in_bits : int
 
-  module BG_ppzksnark = struct
-    let prefix = with_prefix M.prefix "bg"
+      val test_bit : t -> int -> bool
 
-    module Proving_key = struct
-      include Make_proving_key(struct let prefix = with_prefix prefix "proving_key" end)
+      val is_zero : t -> bool
+
+      module Vector : Vector.S with type elt := t
     end
+  end
 
-    module Verification_key = struct 
-      include Make_verification_key(struct let prefix = with_prefix prefix "verification_key" end)
-    end
+  module G1 : sig
+    type t
+    val typ : t Ctypes.typ
+    val of_field : Field.t -> t
+    val get_x : t -> Bigint.Q.t
+    val get_y : t -> Bigint.Q.t
+  end
 
-    module Keypair = Make_keypair(struct let prefix = with_prefix prefix "keypair" end)(Proving_key)(Verification_key)
+  module G2 : sig
+    type t
+    val typ : t Ctypes.typ
+    val get_x : t -> Bigint.Q.Vector.t
+    val get_y : t -> Bigint.Q.Vector.t
+  end
+end
 
+module Make_bg_ppzksnark_keys
+  (Common : Common_intf)
+  (Hash : sig
+    val hash : bool list -> Common.Field.t 
+    end)
+  = struct
 
-    module Proof = struct
+    let prefix = with_prefix Common.prefix "bg"
+
+    module Keys = Make_key(struct let prefix = prefix end)
+
+    module Proving_key = Keys.Proving_key
+    module Verification_key = Keys.Verification_key
+    module Keypair = Keys.Keypair
+
+    module Partial_proof = struct
       type t = unit ptr
+      let prefix = with_prefix prefix "proof"
+      let func_name = with_prefix prefix
 
       let typ = ptr void
 
-      let create_keypair_name = with_prefix prefix "r1cs_constraint_system_create_keypair" 
+      let delete = foreign (func_name "delete") (type @-> returning void) 
 
-      let create_keypair = 
+      let create =
         let stub =
-          foreign (create_keypair_name)   (R1CS_constraint_system.typ @-> returning Keypair.typ)
-        in
-        fun sys -> 
-          let t = stub sys in
-          Caml.Gc.finalise Keypair.delete t ; 
-          t
-
-      let prefix = with_prefix prefix "proof"
-
-      let func_name = with_prefix prefix
-      
-      let delete = foreign (func_name "delete") (typ @-> returning void)
-
-      let to_string = 
-        let stub = 
-          foreign (func_name "to_string") (typ @-> returning Cpp_string.typ)
-        in 
-        fun t ->
-          let s = stub t in
-          let r = Cpp_string.to_string in 
-          Cpp_string.delete s ; r
+          foreign (func_name "create")
+            (Proving_key.typ @-> Field.Vector.typ @-> Field.Vector.typ @-> Field.typ @-> returning typ )
+          in
+          fun pk ~primary ~auxiliary ~d ->
+            let t = stub pk primary auxiliary d in 
+            Caml.Gc.finalise delete t;
+            t
 
       let get_a : t -> G1.t = 
         let stub = 
@@ -1199,62 +1306,77 @@ module Make_mnt (M : sig val prefix : string end) = struct
         in
         fun t -> 
         let s = stub t in
-        G2.delete s ; s
+        G2.delete s ; s 
 
-      let of_string =
-        let stub =
-        foreign (func_name "of_string")
-        (Cpp_string.typ @-> returning typ)
-        in 
-        fun s ->
-          let str = 
-          Cpp_string.of_string_don't_delete s in 
-          let t = stub str in 
-          Cpp_string.delete str ; t
-
-      let create =
-        let stub =
-          foreign (func_name "create")
-            (Proving_key.typ @-> Field.Vector.typ @-> Field.Vector.typ @-> Field.typ @-> returning typ)
-        in
-        fun k ~primary ~auxiliary ~d ->
-          let t = stub k primary auxiliary d in Caml.Gc.finalise (fun _ -> delete t) t ; t
 
       let verify =
-      foreign (func_name "verify") 
-       (typ @-> Verification_key.typ @-> Field.Vector.typ @-> returning bool)
-(*
-      let really_make_proof pk ~(hash : bool list -> Field.t) ~primary ~auxiliary : (t, Field.t) =
-        let compress_g1 g =
-          (G1.get_x g, 
-          Bigint.R.(test_bit (of_field (G1.get_y g)) 0))
+        foreign (func_name "verify") (typ @-> Verification_key.typ @-> Field.Vector.typ @-> returning bool)
+    end
+
+    module Proof = struct 
+      open Common
+      type t =
+        { partial_proof : Partial_proof.t
+        ; z : G1.t
+        }
+
+      let bigint_to_bits x =
+        List.init Bigint.Q.size_in_bits ~f:(fun i ->
+          Bigint.Q.test_bit x i)
+
+      let g1_to_compressed_bits : G1.t -> bool list =
+        fun g1 ->
+          let x = G1.get_x g in
+          let y = G2.get_y g in
+          Bigint.Q.test_bit y 0 
+          :: bigint_to_bits x
+
+
+      let g2_to_compressed_bits : G2.t -> bool list =
+        fun g2 ->
+        let xv = G2.get_x g in
+        let yv = G2.get_y g in
+        let len = Bigint.Q.Vector.length in
+        let y = Bigint.Q.Vector.get yv 0 in
+        assert (not (Bigint.Q.is_zero y));
+        Bigint.Q.test_bit y 0
+        ::
+        (  List.init len ~f:(fun i ->
+            bigint_to_bits (Bigint.Q.Vector.get x i )
+          )
+          |> List.concat)
+
+      let hash_partial_proof partial_proof =
+        let a = Partial_proof.get_a partial_proof in
+        let b = Partial_proof.get_b partial_proof in
+        let c = Partial_proof.get_c partial_proof in
+        let delta_prime = Partial_proof.get_delta_prime partial_proof in
+        let bits =
+          g1_to_compressed_bits a
+          @ g2_to_compressed_bits b
+          @ g1_to_compressed_bits c
+          @ g2_to_compressed_bits delta_prime
         in 
+        Hash.hash bits
+
+
+      let create pk ~primary ~auxiliary =
         let d = Field.random () in
-        let proof = create ~primary ~auxiliary ~d pk in
-        let a = get_a proof in
-        let b = get_b proof in
-        let c = get_c proof in
-        let delta_prime = get_delta_prime proof in
-          let a_bits = get_bits_G1 a in
-          let b_bits = get_bits_G2 b in
-          let c_bits = get_bits_G1 c in
-          let delta_prime_bits = get_bits_G2 delta_prime in
-            let h = hash a_bits b_bits c_bits delta_prime_bits *)
+        let partial_proof = Partial_proof.create pk ~primary ~auxiliary in 
+        let ys = hash_partial_proof partial_proof in
+        let z = G1.of_field (Field.mul d ys) in
+        { partial_proof; z }
 
-
+      let verify { partial_proof; z } vk =
+        let partial_verify = Partial_proof.verify partial_proof vk in
+        let ys = hash_partial_proof partial_proof in 
+        let double_verify = Partial_proof.double_pairing_check
+          ys (Partial_proof.get_delta_prime partial_proof)
+          z (Verification_key.delta vk)
+        in
+        partial_verify && double_verify
     end
   end
-end
-
-
-
-module type S = module type of Bn128
-
-module Mnt6 =
-  Make_mnt(struct let prefix = "camlsnark_mnt6" end)
-
-module Mnt4 = 
-  Make_mnt(struct let prefix = "camlsnark_mnt4" end)
 
 module Curves = struct
   let mk_coeff typ name =

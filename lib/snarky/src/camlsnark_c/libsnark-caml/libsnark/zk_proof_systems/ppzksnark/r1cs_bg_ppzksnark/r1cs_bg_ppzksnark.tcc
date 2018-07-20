@@ -685,8 +685,6 @@ bool r1cs_bg_ppzksnark_affine_verifier_weak_IC(const r1cs_bg_ppzksnark_verificat
     const libff::affine_ate_G1_precomp<ppT> proof_g_z_precomp = ppT::affine_ate_precompute_G1(proof.g_z);
     const libff::affine_ate_G2_precomp<ppT> proof_g_delta_prime_precomp = ppT::affine_ate_precompute_G2(proof.g_delta_prime);
     const libff::affine_ate_G1_precomp<ppT> acc_precomp = ppT::affine_ate_precompute_G1(acc);
-
-	// I don't understand what this function means but pvk_vk_gamma_anything should not exist/be required anymore
 	
     const libff::Fqk<ppT> QAP_miller = ppT::affine_ate_e_times_e_over_e_miller_loop(
         acc_precomp, //pvk_vk_gamma_g2_precomp,

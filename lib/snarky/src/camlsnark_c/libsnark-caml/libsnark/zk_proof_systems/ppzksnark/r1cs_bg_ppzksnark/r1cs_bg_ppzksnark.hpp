@@ -356,7 +356,7 @@ public:
     friend std::ostream& operator<< <ppT>(std::ostream &out, const r1cs_bg_ppzksnark_proof<ppT> &proof);
     friend std::istream& operator>> <ppT>(std::istream &in, r1cs_bg_ppzksnark_proof<ppT> &proof);
 
-    /* can we not just use proof.g_A / proof->g_A	
+    /* can we not just use  proof->g_A	
     libff::G1<ppT> get_a() const 
     {
 	return g_A;

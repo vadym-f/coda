@@ -798,6 +798,7 @@ module Make_verification_key
   val of_bigstring : Bigstring.t -> t
 
   val size_in_bits : t -> int
+
 end = struct
 
   type t = unit ptr
@@ -1006,6 +1007,7 @@ module Make_ppzksnark_proof
 (Field : sig 
   module Vector : sig
     type t
+    val typ : t Ctypes.typ
   end
 end)
 (Proving_key : Foreign_intf)
@@ -1076,16 +1078,18 @@ end)
 
 module Bn128_ppzksnark = struct
   include Bn128_common
-
-  include Make_keys(struct let prefix = prefix end)
-  module Proof = Make_ppzksnark_proof(struct let prefix = prefix end)
+  include Make_keys(R1CS_constraint_system)(struct 
+  let prefix = prefix end)
+  module Proof = Make_ppzksnark_proof(Field)(Proving_key)
+  (Verification_key)(struct let prefix = prefix end)
 end
 
 module Make_mnt_common (M : sig val prefix : string end) = struct 
   include Make_common(M)
   open M
 
-    module G1 = struct
+  module G1 = struct
+    type t = unit ptr
 
     let prefix = with_prefix prefix "g1"
 
@@ -1107,7 +1111,7 @@ module Make_mnt_common (M : sig val prefix : string end) = struct
         Caml.Gc.finalise Bigint.Q.delete x;
         x
 
-    let of_field : Bigint.R.t -> G1.t =
+    let of_field : Bigint.R.t -> t =
       foreign (with_prefix prefix "of_field")
         (Bigint.R.typ @-> returning typ)
     
@@ -1158,7 +1162,7 @@ module Make_mnt_common (M : sig val prefix : string end) = struct
     end   
 end
 
-module type S = module type of Bn128
+module type S = module type of Bn128_common
 
 module Mnt6_common =
   Make_mnt_common(struct let prefix = "camlsnark_mnt6" end)
@@ -1195,33 +1199,30 @@ module Make_ppzksnark
   include Common
 
   let prefix = with_prefix M.prefix "ppzksnark"
-  module Keys = Make_keys(struct let prefix = prefix end)
+  module Keys = Make_keys(R1CS_constraint_system)(struct let prefix = prefix end)
   include Keys
 end
 
-module Common_intf : sig 
+module type Common_intf = sig 
   val prefix : string
   module Field : sig
     type t
     val typ : t Ctypes.typ
     val random : unit -> t
+    val mul : t -> t -> t
 
     module Vector : sig 
       type t
-      val typ : t Ctype.typ
+      val typ : t Ctypes.typ
     end
   end
 
   module Bigint : sig 
     module Q : sig
       type t
-
       val size_in_bits : int
-
       val test_bit : t -> int -> bool
-
       val is_zero : t -> bool
-
       module Vector : Vector.S with type elt := t
     end
   end
@@ -1232,6 +1233,7 @@ module Common_intf : sig
     val of_field : Field.t -> t
     val get_x : t -> Bigint.Q.t
     val get_y : t -> Bigint.Q.t
+    val delete : t -> unit
   end
 
   module G2 : sig
@@ -1239,7 +1241,10 @@ module Common_intf : sig
     val typ : t Ctypes.typ
     val get_x : t -> Bigint.Q.Vector.t
     val get_y : t -> Bigint.Q.Vector.t
+    val delete : t -> unit
   end
+
+  module R1CS_constraint_system : Foreign_intf
 end
 
 module Make_bg_ppzksnark_keys
@@ -1248,14 +1253,14 @@ module Make_bg_ppzksnark_keys
     val hash : bool list -> Common.Field.t 
     end)
   = struct
+    open Common
+    let prefix = with_prefix prefix "bg"
 
-    let prefix = with_prefix Common.prefix "bg"
-
-    module Keys = Make_key(struct let prefix = prefix end)
+    module Keys = Make_keys(R1CS_constraint_system)(struct let prefix = prefix end)
 
     module Proving_key = Keys.Proving_key
     module Verification_key = Keys.Verification_key
-    module Keypair = Keys.Keypair
+    module Keypair = Keys.Make_keypair
 
     module Partial_proof = struct
       type t = unit ptr
@@ -1264,7 +1269,7 @@ module Make_bg_ppzksnark_keys
 
       let typ = ptr void
 
-      let delete = foreign (func_name "delete") (type @-> returning void) 
+      let delete = foreign (func_name "delete") (typ @-> returning void) 
 
       let create =
         let stub =
@@ -1308,11 +1313,19 @@ module Make_bg_ppzksnark_keys
         let s = stub t in
         G2.delete s ; s 
 
+      let get_delta : Verification_key.t -> G2.t =
+        let stub =
+          foreign (func_name "get_delta") (Verification_key.typ @-> returning G2.typ)
+        in
+        fun t -> 
+        let s = stub t in
+        G2.delete s ; s 
+
       let verify =
         foreign (func_name "verify") (typ @-> Verification_key.typ @-> Field.Vector.typ @-> returning bool)
 
       let double_pairing_check = 
-        foreign (func_name "double_pairing_check") (typ @-> Verification_key.typ @-> Field.Vector.typ @-> returning bool)
+        foreign (func_name "double_pairing_check") (G1.typ @-> G2.typ @-> G1.typ @-> G2.typ @-> returning bool)
     end
 
     module Proof = struct 
@@ -1328,23 +1341,23 @@ module Make_bg_ppzksnark_keys
 
       let g1_to_compressed_bits : G1.t -> bool list =
         fun g1 ->
-          let x = G1.get_x g in
-          let y = G2.get_y g in
+          let x = G1.get_x g1 in
+          let y = G1.get_y g1 in
           Bigint.Q.test_bit y 0 
           :: bigint_to_bits x
 
 
       let g2_to_compressed_bits : G2.t -> bool list =
         fun g2 ->
-        let xv = G2.get_x g in
-        let yv = G2.get_y g in
-        let len = Bigint.Q.Vector.length in
+        let xv = G2.get_x g2 in
+        let yv = G2.get_y g2 in
+        let len = Bigint.Q.Vector.length xv in
         let y = Bigint.Q.Vector.get yv 0 in
         assert (not (Bigint.Q.is_zero y));
         Bigint.Q.test_bit y 0
         ::
         (  List.init len ~f:(fun i ->
-            bigint_to_bits (Bigint.Q.Vector.get x i )
+            bigint_to_bits (Bigint.Q.Vector.get xv i )
           )
           |> List.concat)
 
@@ -1364,17 +1377,17 @@ module Make_bg_ppzksnark_keys
 
       let create pk ~primary ~auxiliary =
         let d = Field.random () in
-        let partial_proof = Partial_proof.create pk ~primary ~auxiliary in 
+        let partial_proof = Partial_proof.create pk ~primary ~auxiliary ~d in 
         let ys = hash_partial_proof partial_proof in
         let z = G1.of_field (Field.mul d ys) in
         { partial_proof; z }
 
-      let verify { partial_proof; z } vk =
-        let partial_verify = Partial_proof.verify partial_proof vk in
-        let ys = hash_partial_proof partial_proof in 
+      let verify { partial_proof; z } vk ~primary =
+        let partial_verify = Partial_proof.verify partial_proof vk primary in
+        let ys =  G1.of_field (hash_partial_proof partial_proof) in 
         let double_verify = Partial_proof.double_pairing_check
           ys (Partial_proof.get_delta_prime partial_proof)
-          z (Verification_key.delta vk)
+          z (Partial_proof.get_delta vk)
         in
         partial_verify && double_verify
     end
@@ -1396,40 +1409,40 @@ module Curves = struct
 
   module Mnt4_ = struct
     module G1 = struct
-      let generator = mk_generator Mnt6.Field.typ Mnt6.Field.delete "mnt4_G1"
+      let generator = mk_generator Mnt6_common.Field.typ Mnt6_common.Field.delete "mnt4_G1"
 
       module Coefficients = struct
         let prefix = "camlsnark_mnt4_G1_coeff"
 
-        let a = mk_coeff Mnt6.Field.typ (with_prefix prefix "a")
+        let a = mk_coeff Mnt6_common.Field.typ (with_prefix prefix "a")
 
-        let b = mk_coeff Mnt6.Field.typ (with_prefix prefix "b")
+        let b = mk_coeff Mnt6_common.Field.typ (with_prefix prefix "b")
       end
     end
   end
 
   module Mnt6 = struct
     module G1 = struct
-      let generator = mk_generator Mnt4.Field.typ Mnt4.Field.delete "mnt6_G1"
+      let generator = mk_generator Mnt4_common.Field.typ Mnt4_common.Field.delete "mnt6_G1"
 
       module Coefficients = struct
         let prefix = "camlsnark_mnt6_G1_coeff"
 
-        let a = mk_coeff Mnt4.Field.typ (with_prefix prefix "a")
+        let a = mk_coeff Mnt4_common.Field.typ (with_prefix prefix "a")
 
-        let b = mk_coeff Mnt4.Field.typ (with_prefix prefix "b")
+        let b = mk_coeff Mnt4_common.Field.typ (with_prefix prefix "b")
       end
     end
 
     let final_exponent_last_chunk_abs_of_w0 =
       !@
         (foreign_value "camlsnark_mnt6_final_exponent_last_chunk_abs_of_w0"
-           Mnt6.Bigint.Q.typ)
+           Mnt6_common.Bigint.Q.typ)
 
     let final_exponent_last_chunk_w1 =
       !@
         (foreign_value "camlsnark_mnt6_final_exponent_last_chunk_w1"
-           Mnt6.Bigint.Q.typ)
+           Mnt6_common.Bigint.Q.typ)
   end
 
   module Mnt4 = Mnt4_

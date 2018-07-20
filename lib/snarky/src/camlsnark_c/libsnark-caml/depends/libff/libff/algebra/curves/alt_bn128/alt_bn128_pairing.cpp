@@ -509,12 +509,12 @@ alt_bn128_GT alt_bn128_ate_reduced_pairing(const alt_bn128_G1 &P, const alt_bn12
 
 /* choice of pairing */
 
-alt_bn128_G1_precomp alt_bn128_precompute_G1(const alt_bn128_G1& P)
+alt_bn128_G1_precomp alt_bn128_precompute_G1(const alt_bn128_G1 &P)
 {
     return alt_bn128_ate_precompute_G1(P);
 }
 
-alt_bn128_G2_precomp alt_bn128_precompute_G2(const alt_bn128_G2& Q)
+alt_bn128_G2_precomp alt_bn128_precompute_G2(const alt_bn128_G2 &Q)
 {
     return alt_bn128_ate_precompute_G2(Q);
 }
@@ -533,7 +533,7 @@ alt_bn128_Fq12 alt_bn128_double_miller_loop(const alt_bn128_G1_precomp &prec_P1,
     return alt_bn128_ate_double_miller_loop(prec_P1, prec_Q1, prec_P2, prec_Q2);
 }
 
-alt_bn128_Fq12 alt_bn128_pairing(const alt_bn128_G1& P,
+alt_bn128_Fq12 alt_bn128_pairing(const alt_bn128_G1 &P,
                       const alt_bn128_G2 &Q)
 {
     return alt_bn128_ate_pairing(P, Q);

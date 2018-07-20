@@ -1,4 +1,5 @@
 #include <libsnark/caml/caml_bn128.hpp>
+#include <libff/algebra/curves/bn128/bn128_pairing.hpp>
 
 extern "C" {
 using namespace libsnark;
@@ -390,15 +391,6 @@ linear_term<FieldT>* camlsnark_bn128_linear_combination_term_vector_get(std::vec
   return new linear_term<FieldT>(res);
 }
 
-
-
-/* // also move to keypair (particularly 'proving_key') land
-r1cs_constraint_system<FieldT>* camlsnark_bn128_proving_key_r1cs_constraint_system(
-    r1cs_ppzksnark_proving_key<ppT>* pk) {
-  return &pk->constraint_system;
-}
-*/
-
 r1cs_constraint_system<FieldT>* camlsnark_bn128_proving_key_r1cs_constraint_system(r1cs_ppzksnark_proving_key<ppT>* pk) {
   return &pk->constraint_system;
 }
@@ -624,15 +616,6 @@ bool camlsnark_bn128_proof_verify(
   return r1cs_ppzksnark_verifier_weak_IC(*key, *primary_input, *proof);
 }
 
-
-bool camlsnark_bn128_proof_double_paring_check(
-    libff::G1<ppT>* ys,
-    libff::G2<ppT>* delta_prime,
-    libff::G1<ppT>* z,
-    libff::G2<ppT>* delta) {
-  return;
-}
-
 // vectors of field elements
 std::vector<FieldT>* camlsnark_bn128_field_vector_create() {
   return new std::vector<FieldT>();
@@ -722,7 +705,6 @@ void camlsnark_bn128_g2_delete(libff::G2<ppT>* g) {
 }
 
 // Groth/Bowe-Gabizon functions
-
 
 r1cs_constraint_system<FieldT>* camlsnark_bn128_bg_ppzksnark_proving_key_r1cs_constraint_system(
     r1cs_bg_ppzksnark_proving_key<ppT>* pk) {
@@ -845,4 +827,7 @@ libff::G2<ppT>* camlsnark_bn128_bg_proof_get_delta_prime(r1cs_bg_ppzksnark_proof
   return new libff::G2<ppT>(delta_prime);
 }
 
+libff::G2<ppT>* camlsnark_bn128_bg_proof_get_delta(r1cs_bg_ppzksnark_verification_key<ppT>* vk){
+  return &vk->delta_g2;
+}
 }

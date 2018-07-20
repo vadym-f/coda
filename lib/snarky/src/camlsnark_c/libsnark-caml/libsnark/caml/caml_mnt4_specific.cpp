@@ -21,6 +21,21 @@ libff::G1<ppT>* camlsnark_mnt4_g1_of_field(libff::bigint<libff::mnt4_r_limbs>* k
   return new libff::G1<ppT>(*k * *g);
 }
 
+bool camlsnark_mnt4_bg_proof_double_pairing_check(
+  libff::G1<ppT>* ys_p,
+  libff::G2<ppT>* delta_prime_p,
+  libff::G1<ppT>* z_p,
+  libff::G2<ppT>* delta_p
+){
+  libff::G1<ppT> ys = *ys_p;
+  libff::G2<ppT> delta_prime = *delta_prime_p;
+  libff::G1<ppT> z = *z_p;
+  libff::G2<ppT> delta = *delta_p;
+  libff::Fqk<ppT> lhs = mnt4_ate_double_miller_loop(mnt4_ate_precompute_G1(ys), mnt4_ate_precompute_G2(delta_prime), mnt4_ate_precompute_G1(-z), mnt4_ate_precompute_G2(delta));
+  libff::GT<ppT> result = mnt4_final_exponentiation(lhs);
+  return (result == libff::GT<ppT>::one());
+}
+
 // G2 functions
 
 std::vector<libff::bigint<libff::mnt4_q_limbs>>*  camlsnark_mnt4_g2_get_x(libff::G2<ppT>* g) {

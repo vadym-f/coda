@@ -390,9 +390,13 @@ linear_term<FieldT>* camlsnark_mnt6_linear_combination_term_vector_get(std::vect
   return new linear_term<FieldT>(res);
 }
 
-r1cs_constraint_system<FieldT>* camlsnark_mnt6_proving_key_r1cs_constraint_system(
-    r1cs_ppzksnark_proving_key<ppT>* pk) {
+r1cs_constraint_system<FieldT>* camlsnark_mnt6_proving_key_r1cs_constraint_system(r1cs_ppzksnark_proving_key<ppT>* pk) {
   return &pk->constraint_system;
+}
+
+r1cs_ppzksnark_keypair<ppT>* camlsnark_mnt6_keypair_create(r1cs_constraint_system<FieldT>* sys) {
+  auto res = r1cs_ppzksnark_generator<ppT>(*sys);
+  return new r1cs_ppzksnark_keypair<ppT>(res);
 }
 
 r1cs_ppzksnark_proving_key<ppT>* camlsnark_mnt6_keypair_pk(r1cs_ppzksnark_keypair<ppT>* keypair) {
@@ -571,12 +575,13 @@ int camlsnark_mnt6_r1cs_constraint_system_get_auxiliary_input_size(
   return sys->auxiliary_input_size;
 }
 
+/* // relocated 
 r1cs_ppzksnark_keypair<ppT>* camlsnark_mnt6_r1cs_constraint_system_create_keypair(
     r1cs_constraint_system<FieldT>* sys) {
   auto res = r1cs_ppzksnark_generator<ppT>(*sys);
   return new r1cs_ppzksnark_keypair<ppT>(res);
 }
-
+*/ 
 std::string* camlsnark_mnt6_proof_to_string(
     r1cs_ppzksnark_proof<ppT>* p) {
   std::stringstream stream;
@@ -680,12 +685,10 @@ void camlsnark_mnt6_bigint_q_vector_delete(std::vector<libff::bigint<libff::mnt6
   delete v;
 }
 
-
 // G1 functions
 void camlsnark_mnt6_g1_to_affine(libff::G1<ppT>* g) {
   g->to_affine_coordinates();
 }
-
 
 void camlsnark_mnt6_g1_delete(libff::G1<ppT>* g) {
   delete g;
@@ -701,7 +704,6 @@ void camlsnark_mnt6_g2_delete(libff::G2<ppT>* g) {
 }
 
 // Groth/Bowe-Gabizon functions
-
 
 r1cs_constraint_system<FieldT>* camlsnark_mnt6_bg_ppzksnark_proving_key_r1cs_constraint_system(
     r1cs_bg_ppzksnark_proving_key<ppT>* pk) {
@@ -760,8 +762,8 @@ r1cs_bg_ppzksnark_verification_key<ppT>* camlsnark_mnt6_bg_verification_key_of_s
   return vk;
 }
 
-
-r1cs_bg_ppzksnark_keypair<ppT>* camlsnark_mnt6_bg_r1cs_constraint_system_create_keypair(
+// changed name to keypair_create
+r1cs_bg_ppzksnark_keypair<ppT>* camlsnark_mnt6_bg_keypair_create(
     r1cs_constraint_system<FieldT>* sys) {
   auto res = r1cs_bg_ppzksnark_generator<ppT>(*sys);
   return new r1cs_bg_ppzksnark_keypair<ppT>(res);
@@ -824,4 +826,7 @@ libff::G2<ppT>* camlsnark_mnt6_bg_proof_get_delta_prime(r1cs_bg_ppzksnark_proof<
   return new libff::G2<ppT>(delta_prime);
 }
 
+libff::G2<ppT>* camlsnark_mnt6_bg_proof_get_delta(r1cs_bg_ppzksnark_verification_key<ppT>* vk){
+  return &vk->delta_g2;
+}
 }

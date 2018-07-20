@@ -15,6 +15,26 @@ libff::bigint<libff::mnt6_q_limbs>*  camlsnark_mnt6_g1_get_y(libff::G1<ppT>* g) 
   return new libff::bigint<libff::mnt6_q_limbs>(g->Y().as_bigint());
 }
 
+libff::G1<ppT>* camlsnark_mnt6_g1_of_field(libff::bigint<libff::mnt6_r_limbs>* k) {
+  libff::G1<ppT>* g = new libff::G1<ppT>();
+  g->one();
+  return new libff::G1<ppT>(*k * *g);
+}
+
+bool camlsnark_mnt6_bg_proof_double_pairing_check(
+  libff::G1<ppT>* ys_p,
+  libff::G2<ppT>* delta_prime_p,
+  libff::G1<ppT>* z_p,
+  libff::G2<ppT>* delta_p
+){
+  libff::G1<ppT> ys = *ys_p;
+  libff::G2<ppT> delta_prime = *delta_prime_p;
+  libff::G1<ppT> z = *z_p;
+  libff::G2<ppT> delta = *delta_p;
+  libff::Fqk<ppT> lhs = mnt6_ate_double_miller_loop(mnt6_ate_precompute_G1(ys), mnt6_ate_precompute_G2(delta_prime), mnt6_ate_precompute_G1(-z), mnt6_ate_precompute_G2(delta));
+  libff::GT<ppT> result = mnt6_final_exponentiation(lhs);
+  return (result == libff::GT<ppT>::one());
+}
 
 // G2 functions
 
@@ -35,7 +55,6 @@ std::vector<libff::bigint<libff::mnt6_q_limbs>>*  camlsnark_mnt6_g2_get_y(libff:
   }
   return result;
   }
-
 
 // verification key
 
@@ -70,6 +89,7 @@ std::vector<FieldT>* camlsnark_mnt6_verification_key_other_to_field_vector(
 }
 
 // verification key variable
+
 r1cs_ppzksnark_verification_key_variable<ppT>* camlsnark_mnt6_r1cs_ppzksnark_verification_key_variable_create(
     protoboard<FieldT>* pb,
     pb_variable_array<FieldT>* all_bits,
@@ -98,6 +118,7 @@ void camlsnark_mnt6_r1cs_ppzksnark_verification_key_variable_generate_r1cs_witne
 }
 
 // proof variable
+
 r1cs_ppzksnark_proof_variable<ppT>* camlsnark_mnt6_r1cs_ppzksnark_proof_variable_create(
     protoboard<FieldT>* pb) {
   return new r1cs_ppzksnark_proof_variable<ppT>(*pb, "proof_variable");
@@ -119,7 +140,8 @@ void camlsnark_mnt6_r1cs_ppzksnark_proof_variable_generate_r1cs_witness(
   pv->generate_r1cs_witness(*p);
 }
 
-// verifier
+// verifier gadget
+
 r1cs_ppzksnark_verifier_gadget<ppT>* camlsnark_mnt6_r1cs_ppzksnark_verifier_gadget_create(
     protoboard<FieldT>* pb,
     r1cs_ppzksnark_verification_key_variable<ppT>* vk,

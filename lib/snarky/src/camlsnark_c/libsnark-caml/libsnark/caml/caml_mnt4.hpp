@@ -9,6 +9,7 @@
 #include <libff/algebra/curves/mnt/mnt6/mnt6_pp.hpp>
 #include <libff/algebra/curves/mnt/mnt4/mnt4_init.hpp>
 #include <libff/algebra/curves/mnt/mnt4/mnt4_pairing.hpp>
+#include <libff/algebra/curves/mnt/mnt6/mnt6_pairing.hpp>
 #include <libff/common/rng.hpp>
 #include <libff/algebra/fields/bigint.hpp>
 #include <libff/algebra/scalar_multiplication/wnaf.hpp>

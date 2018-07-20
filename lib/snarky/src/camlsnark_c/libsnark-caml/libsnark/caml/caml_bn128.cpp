@@ -1,5 +1,4 @@
 #include <libsnark/caml/caml_bn128.hpp>
-#include <libff/algebra/curves/bn128/bn128_pairing.hpp>
 
 extern "C" {
 using namespace libsnark;

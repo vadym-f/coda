@@ -624,6 +624,15 @@ bool camlsnark_bn128_proof_verify(
   return r1cs_ppzksnark_verifier_weak_IC(*key, *primary_input, *proof);
 }
 
+
+bool camlsnark_bn128_proof_double_paring_check(
+    libff::G1<ppT>* ys,
+    libff::G2<ppT>* delta_prime,
+    libff::G1<ppT>* z,
+    libff::G2<ppT>* delta) {
+  return;
+}
+
 // vectors of field elements
 std::vector<FieldT>* camlsnark_bn128_field_vector_create() {
   return new std::vector<FieldT>();

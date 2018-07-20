@@ -1308,9 +1308,11 @@ module Make_bg_ppzksnark_keys
         let s = stub t in
         G2.delete s ; s 
 
-
       let verify =
         foreign (func_name "verify") (typ @-> Verification_key.typ @-> Field.Vector.typ @-> returning bool)
+
+      let double_pairing_check = 
+        foreign (func_name "double_pairing_check") (typ @-> Verification_key.typ @-> Field.Vector.typ @-> returning bool)
     end
 
     module Proof = struct 

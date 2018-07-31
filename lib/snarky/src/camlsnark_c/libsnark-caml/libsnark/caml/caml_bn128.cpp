@@ -141,8 +141,7 @@ void camlsnark_bn128_init_public_params() {
 }
 
 int camlsnark_bn128_field_size_in_bits() {
-  auto n = FieldT::size_in_bits();
-  return n;
+  return FieldT::size_in_bits();
 }
 
 libff::bigint<libff::bn128_r_limbs>* camlsnark_bn128_field_size() {
@@ -265,6 +264,10 @@ void camlsnark_bn128_bigint_r_print(libff::bigint<libff::bn128_r_limbs>* n) {
   n->print();
 }
 
+int camlsnark_bn128_bigint_r_size_in_bits() {
+  return FieldT::size_in_bits();
+}
+
 std::vector<long>* camlsnark_bn128_bigint_r_find_wnaf(
     size_t window_size, libff::bigint<libff::bn128_r_limbs>* scalar) {
   return new std::vector<long>(libff::find_wnaf(window_size, *scalar));
@@ -281,6 +284,14 @@ void camlsnark_bn128_bigint_q_delete(libff::bigint<libff::bn128_q_limbs>* n) {
 
 void camlsnark_bn128_bigint_q_print(libff::bigint<libff::bn128_q_limbs>* n) {
   n->print();
+}
+
+bool camlsnark_bn128_bigint_q_is_zero(libff::bigint<libff::bn128_q_limbs>* n) {
+  return n->is_zero();
+}
+
+int camlsnark_bn128_bigint_q_size_in_bits() {
+  return FieldT::size_in_bits();
 }
 
 std::vector<long>* camlsnark_bn128_bigint_q_find_wnaf(

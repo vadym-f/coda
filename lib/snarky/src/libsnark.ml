@@ -31,35 +31,20 @@ struct
     type t
 
     val typ : t Ctypes.typ
-
     val add : t -> t -> t
-
     val sub : t -> t -> t
-
     val mul : t -> t -> t
-
     val inv : t -> t
-
     val is_square : t -> bool
-
     val sqrt : t -> t
-
     val square : t -> t
-
     val of_int : int -> t
-
     val one : t
-
     val zero : t
-
     val equal : t -> t -> bool
-
     val size_in_bits : int
-
     val random : unit -> t
-
     val delete : t -> unit
-
     val print : t -> unit
 
     module Vector : Vector.S with type elt = t
@@ -212,43 +197,30 @@ struct
         Unsigned.Size_t.to_int r
   end
 
-
   module Bigint : sig
     module R : sig
       type t
-
       val typ : t Ctypes.typ
-
       val of_decimal_string : string -> t
-
       val of_numeral : string -> base:int -> t
-
       val of_field : Field.t -> t
-
       val div : t -> t -> t
-
       val to_field : t -> Field.t
-
       val compare : t -> t -> int
-
       val test_bit : t -> int -> bool
-
+      val size_in_bits : int
       val find_wnaf : Unsigned.Size_t.t -> t -> Long_vector.t
-      (* we actually dont need this (yet?)*)
       module Vector : Vector.S with type elt = t  
     end
 
     module Q : sig
       type t
-
       val delete : t -> unit
-
       val typ : t Ctypes.typ
-
       val test_bit : t -> int -> bool
-
+      val is_zero : t -> bool
+      val size_in_bits : int
       val find_wnaf : Unsigned.Size_t.t -> t -> Long_vector.t
-
       module Vector : Vector.S with type elt = t
     end
     end
@@ -340,11 +312,29 @@ struct
           let x = stub n in
           Caml.Gc.finalise Field.delete x ;
           x
-    end
 
-    module Q = Common (struct
+      let size_in_bits =
+        let stub =
+          foreign (func_name "size_in_bits") (void @-> returning int)
+        in
+        stub ()
+      end
+
+    module Q = struct
       let prefix = "q"
-    end)
+            include Common (struct
+        let prefix = prefix
+      end)
+
+      let is_zero =
+        foreign (func_name "is_zero") (typ @-> returning bool)
+
+      let size_in_bits =
+        let stub =
+          foreign (func_name "size_in_bits") (void @-> returning int)
+        in
+        stub ()
+      end
   end
 
   let field_size =
@@ -355,9 +345,9 @@ struct
     in
     stub ()
 
-
   module Linear_combination : sig
     type t
+    type t0 = t
 
     val typ : t Ctypes.typ
 
@@ -373,35 +363,25 @@ struct
 
     module Term : sig
       type t
-
       val create : Field.t -> Var.t -> t
-
       module Vector : Vector.S with type elt = t
     end
 
     module Vector : Vector.S with type elt = t
-
     val add_term : t -> Field.t -> Var.t -> unit
   end = struct
     type t = unit ptr
-
+    type t0 = t
     let typ = ptr void
-
     let prefix = with_prefix M.prefix "linear_combination"
-
     let func_name = with_prefix prefix
 
     module Term = struct
       type t = unit ptr
-
       let typ = ptr void
-
       let prefix = with_prefix prefix "term"
-
       let func_name = with_prefix prefix
-
       let delete = foreign (func_name "delete") (typ @-> returning void)
-
       let create =
         let stub =
           foreign (func_name "create") (Field.typ @-> Var.typ @-> returning typ)
@@ -412,27 +392,22 @@ struct
 
       module Vector = Vector.Make (struct
         type elt = t
-
         let typ = typ
-
         let prefix = with_prefix prefix "vector"
       end)
     end
 
     module Vector = Vector.Make (struct
       type elt = t
-
       let typ = typ
-
       let prefix = with_prefix prefix "vector"
+      let emplace_back =
+        foreign (func_name "emplace_back") (typ @-> typ @-> returning void)
     end)
 
     let print = foreign (func_name "print") (typ @-> returning void)
-
     let delete = foreign (func_name "delete") (typ @-> returning void)
-
     let schedule_delete t = Caml.Gc.finalise delete t
-
     (*
     let substitute =
       foreign (func_name "substitute")
@@ -939,6 +914,54 @@ end = struct
       (typ @-> returning R1CS_constraint_system.typ)
 end
 
+module Make_keypair
+  (Prefix : sig val prefix : string end)
+  (R1CS_constraint_system : Foreign_intf)
+  (Proving_key : Deletable_intf)
+  (Verification_key : Deletable_intf) : sig 
+  include Deletable_intf
+
+  val pk : t -> Proving_key.t
+
+  val vk : t -> Verification_key.t
+end = struct
+  type t = unit ptr
+
+  let typ = ptr void
+
+  open Prefix
+
+  let func_name s = with_prefix prefix s
+
+  let delete = foreign (func_name "delete") (typ @-> returning void)
+
+  let create =
+    let stub =
+      foreign (func_name "create") (R1CS_constraint_system.typ @-> returning typ)
+    in
+    fun t ->
+      let keypair = stub t in
+      Caml.Gc.finalise delete keypair ;
+      keypair
+
+  let pk =
+    let stub =
+      foreign (func_name "pk") (typ @-> returning Proving_key.typ)
+    in
+    fun t ->
+      let k = stub t in
+      Caml.Gc.finalise Proving_key.delete k ;
+      k
+
+  let vk =
+    let stub =
+      foreign (func_name "vk") (typ @-> returning Verification_key.typ)
+    in
+    fun t ->
+      let k = stub t in
+      Caml.Gc.finalise Verification_key.delete k ;
+      k
+end
 
 module Make_keys
   (R1CS_constraint_system : sig 
@@ -954,53 +977,7 @@ module Make_keys
   module Verification_key = Make_verification_key(struct 
   let prefix = with_prefix Prefix.prefix "verification_key" end)
 
-  module Make_keypair
-    (Prefix : sig val prefix : string end)
-    (Proving_key : Deletable_intf)
-    (Verification_key : Deletable_intf) : sig 
-    include Deletable_intf
-
-    val pk : t -> Proving_key.t
-
-    val vk : t -> Verification_key.t
-  end = struct
-    type t = unit ptr
-
-    let typ = ptr void
-
-    open Prefix
-
-    let func_name s = with_prefix prefix s
-
-    let delete = foreign (func_name "delete") (typ @-> returning void)
-
-    let create =
-      let stub =
-        foreign (func_name "create") (R1CS_constraint_system.typ @-> returning typ)
-      in
-      fun t ->
-        let keypair = stub t in
-        Caml.Gc.finalise delete keypair ;
-        keypair
-
-    let pk =
-      let stub =
-        foreign (func_name "pk") (typ @-> returning Proving_key.typ)
-      in
-      fun t ->
-        let k = stub t in
-        Caml.Gc.finalise Proving_key.delete k ;
-        k
-
-    let vk =
-      let stub =
-        foreign (func_name "vk") (typ @-> returning Verification_key.typ)
-      in
-      fun t ->
-        let k = stub t in
-        Caml.Gc.finalise Verification_key.delete k ;
-        k
-  end
+  module Keypair = Make_keypair(struct let prefix = with_prefix Prefix.prefix "keypair" end)(R1CS_constraint_system)(Proving_key)(Verification_key)
 end
 
 module Make_ppzksnark_proof
@@ -1076,14 +1053,6 @@ module Bn128_common = Make_common (struct
   let prefix = "camlsnark_bn128"
 end)
 
-module Bn128_ppzksnark = struct
-  include Bn128_common
-  include Make_keys(R1CS_constraint_system)(struct 
-  let prefix = prefix end)
-  module Proof = Make_ppzksnark_proof(Field)(Proving_key)
-  (Verification_key)(struct let prefix = prefix end)
-end
-
 module Make_mnt_common (M : sig val prefix : string end) = struct 
   include Make_common(M)
   open M
@@ -1111,9 +1080,9 @@ module Make_mnt_common (M : sig val prefix : string end) = struct
         Caml.Gc.finalise Bigint.Q.delete x;
         x
 
-    let of_field : Bigint.R.t -> t =
+    let of_field : Field.t -> t =
       foreign (with_prefix prefix "of_field")
-        (Bigint.R.typ @-> returning typ)
+        (Field.typ @-> returning typ)
     
     let get_y : t -> Bigint.Q.t =
       let stub =
@@ -1162,8 +1131,6 @@ module Make_mnt_common (M : sig val prefix : string end) = struct
     end   
 end
 
-module type S = module type of Bn128_common
-
 module Mnt6_common =
   Make_mnt_common(struct let prefix = "camlsnark_mnt6" end)
 
@@ -1192,16 +1159,6 @@ module Mnt4_common =
               - [x] create (i.e., really_make_proof) calls Proof_partial.create and sticsk in the other hash stuff
     *)
 
-module Make_ppzksnark
-  (M : sig val prefix : string end)
-  = struct 
-  module Common = Make_common(M)
-  include Common
-
-  let prefix = with_prefix M.prefix "ppzksnark"
-  module Keys = Make_keys(R1CS_constraint_system)(struct let prefix = prefix end)
-  include Keys
-end
 
 module type Common_intf = sig 
   val prefix : string
@@ -1210,6 +1167,7 @@ module type Common_intf = sig
     val typ : t Ctypes.typ
     val random : unit -> t
     val mul : t -> t -> t
+    val size_in_bits : int
 
     module Vector : sig 
       type t
@@ -1225,42 +1183,66 @@ module type Common_intf = sig
       val is_zero : t -> bool
       module Vector : Vector.S with type elt := t
     end
-  end
-
-  module G1 : sig
-    type t
-    val typ : t Ctypes.typ
-    val of_field : Field.t -> t
-    val get_x : t -> Bigint.Q.t
-    val get_y : t -> Bigint.Q.t
-    val delete : t -> unit
-  end
-
-  module G2 : sig
-    type t
-    val typ : t Ctypes.typ
-    val get_x : t -> Bigint.Q.Vector.t
-    val get_y : t -> Bigint.Q.Vector.t
-    val delete : t -> unit
+    module R : sig
+      type t
+      val size_in_bits : int
+      val test_bit : t -> int -> bool
+      module Vector : Vector.S with type elt := t
+    end
   end
 
   module R1CS_constraint_system : Foreign_intf
 end
 
-module Make_bg_ppzksnark_keys
+module Make_ppzksnark
   (Common : Common_intf)
+  = struct
+  open Common
+  let prefix = with_prefix Common.prefix "ppzksnark"
+  module Keys = Make_keys(R1CS_constraint_system)(struct let prefix = prefix end)
+  include Keys
+  module Proof = Make_ppzksnark_proof(Field)(Proving_key)(Verification_key)(struct let prefix = prefix end)
+end
+
+module Bn128_ppzksnark = struct
+  include Bn128_common
+  include Make_ppzksnark(Bn128_common) 
+end
+
+module Make_bg_ppzksnark_keys
+  (Common : sig
+   include Common_intf
+
+    module G1 : sig
+      type t
+      val typ : t Ctypes.typ
+      val of_field : Field.t -> t
+      val get_x : t -> Bigint.Q.t
+      val get_y : t -> Bigint.Q.t
+      val delete : t -> unit
+    end
+
+    module G2 : sig
+      type t
+      val typ : t Ctypes.typ
+      val get_x : t -> Bigint.Q.Vector.t
+      val get_y : t -> Bigint.Q.Vector.t
+      val delete : t -> unit
+    end
+
+  end)
   (Hash : sig
     val hash : bool list -> Common.Field.t 
     end)
   = struct
-    open Common
+  open Common
     let prefix = with_prefix prefix "bg"
 
     module Keys = Make_keys(R1CS_constraint_system)(struct let prefix = prefix end)
 
     module Proving_key = Keys.Proving_key
     module Verification_key = Keys.Verification_key
-    module Keypair = Keys.Make_keypair
+    module Keypair = Keys.Keypair
 
     module Partial_proof = struct
       type t = unit ptr
@@ -1446,4 +1428,90 @@ module Curves = struct
   end
 
   module Mnt4 = Mnt4_
+end
+
+module Mnt4_ppzksnark = struct
+  include Mnt4_common
+  include Make_ppzksnark(Mnt4_common)
+end
+module Mnt6_ppzksnark = struct
+  include Mnt6_common
+  include Make_ppzksnark(Mnt6_common)
+end
+
+module Mnt4 (Hash : sig val hash : bool list -> Mnt4_common.Field.t end) = 
+ Make_bg_ppzksnark_keys
+  (Mnt4_common) (Hash)
+
+module Mnt6 (Hash : sig type field val hash : bool list -> Mnt6_common.Field.t end) = 
+ Make_bg_ppzksnark_keys
+  (Mnt6_common) (Hash)
+
+module type S = sig
+
+  val prefix : string
+
+  module Field : sig
+    type t
+    val typ : t Ctypes.typ
+    val size_in_bits : int
+    module Vector : Foreign_intf
+  end
+
+  module Verification_key : Foreign_intf
+  module Proof : Foreign_intf
+
+  module Var : sig
+    type t
+    val typ : t Ctypes.typ
+    val create : int -> t
+  end
+
+  module R1CS_constraint_system : Foreign_intf
+
+  module Linear_combination : sig
+    type t
+    val typ : t Ctypes.typ
+    type t0 = t
+    module Vector : sig
+      type t
+      val typ : t Ctypes.typ
+      val create : unit -> t
+      val emplace_back : t -> t0 -> unit
+    end
+    val create : unit -> t
+    val of_field : Field.t -> t
+    val add_term : t -> Field.t -> Var.t -> unit
+  end
+  
+  module Protoboard : sig
+    type t
+    val typ : t Ctypes.typ
+    val create : unit -> t
+    val set_input_sizes : t -> int -> unit
+    val num_variables : t -> int
+    val renumber_and_append_constraints :
+         t
+      -> R1CS_constraint_system.t
+      -> Linear_combination.Vector.t
+      -> int
+      -> unit
+
+    module Variable : sig
+      type t
+      val typ : t Ctypes.typ
+      val index : t -> int
+    end
+
+    val allocate_variable : t -> Variable.t
+    val set_variable : t -> Variable.t -> Field.t -> unit
+    val auxiliary_input : t -> Field.Vector.t
+
+    module Variable_array : sig
+      type t
+      val typ : t Ctypes.typ
+      val create : unit -> t
+      val emplace_back : t -> Variable.t -> unit
+    end
+  end
 end

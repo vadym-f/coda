@@ -233,21 +233,23 @@ end
 
 module Mnt4
     (Impl : Snark_intf.S
-            with type field = Libsnark.Mnt4.Field.t
-             and type Var.t = Libsnark.Mnt4.Var.t
-             and type Field.Vector.t = Libsnark.Mnt4.Field.Vector.t
+            with type field = Libsnark.Mnt4_ppzksnark.Field.t
+             and type Var.t = Libsnark.Mnt4_ppzksnark.Var.t
+             and type Field.Vector.t = Libsnark.Mnt4_ppzksnark.Field.Vector.t
              and type R1CS_constraint_system.t =
-                        Libsnark.Mnt4.R1CS_constraint_system.t) (Info : sig
+                        Libsnark.Mnt4_ppzksnark.R1CS_constraint_system.t) (Info : sig
         val input_size : int
     end) =
-  Make (Impl) (Libsnark.Mnt4) (Libsnark.Mnt6) (Info)
+  Make (Impl) 
+  (Libsnark.Mnt4_ppzksnark) 
+  (Libsnark.Mnt6_ppzksnark) (Info)
 module Mnt6
     (Impl : Snark_intf.S
-            with type field = Libsnark.Mnt6.Field.t
-             and type Var.t = Libsnark.Mnt6.Var.t
-             and type Field.Vector.t = Libsnark.Mnt6.Field.Vector.t
+            with type field = Libsnark.Mnt6_ppzksnark.Field.t
+             and type Var.t = Libsnark.Mnt6_ppzksnark.Var.t
+             and type Field.Vector.t = Libsnark.Mnt6_ppzksnark.Field.Vector.t
              and type R1CS_constraint_system.t =
-                        Libsnark.Mnt6.R1CS_constraint_system.t) (Info : sig
+                        Libsnark.Mnt6_ppzksnark.R1CS_constraint_system.t) (Info : sig
         val input_size : int
     end) =
-  Make (Impl) (Libsnark.Mnt6) (Libsnark.Mnt4) (Info)
+  Make (Impl) (Libsnark.Mnt6_ppzksnark) (Libsnark.Mnt4_ppzksnark) (Info)

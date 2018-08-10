@@ -499,7 +499,18 @@ module Edwards = struct
     Extend (Impl) (Scalar) (Basic.Make (Impl.Field) (Params))
 end
 
-module Make
+(* Caller responsible for supplying sigma = random curve point *)
+(* points (/bits?) can be adversarially generated, sigma to mitigate against this *)
+
+
+(* lookup_and_add
+    (s0) × (s1) = (s&)
+    (y1 + (y2-y1).s0 + (y3-y1).s1 + (y4+y1-y2-y3).s&) × (1 - 2.s2) = (yb)
+    (x1 + (x2-x1).s0 + (x3-x1).s1 + (x4+x1-x2-x3).s& - xa) × (λ) = (yb - ya)
+    (B.λ) × (λ) = (A + xa + x1 + (x2-x1).s0 + (x3-x1).s1 + (x4+x1-x2-x3).s& + xc)
+    (xa - xc) × (λ) = (yc + ya) *)
+
+module Make (* rename to make_weierstrass ? then we will need to find everywhere this is used though? *)
     (Impl : Snark_intf.S)
     (Params : Params_intf with type field := Impl.Field.t) (Scalar : sig
         type var = Impl.Boolean.var list

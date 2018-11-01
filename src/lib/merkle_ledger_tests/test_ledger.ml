@@ -1,5 +1,4 @@
 open Core
-open Unsigned
 module Intf = Merkle_ledger.Intf
 module Ledger = Merkle_ledger.Ledger
 
@@ -8,6 +7,7 @@ let%test_module "test functor on in memory databases" =
     module Key = Test_stubs.Key
     module Hash = Test_stubs.Hash
     module Account = Test_stubs.Account
+    module Receipt = Test_stubs.Receipt
 
     module Make (Depth : Intf.Depth) = struct
       include Ledger.Make (Key) (Account) (Hash) (Depth)
@@ -18,16 +18,37 @@ let%test_module "test functor on in memory databases" =
 
       type hash = Hash.t
 
-      let load_ledger n b : t * key list =
+      let gen_public_keys num_keys =
+        (* TODO : the Quickcheck generator for public keys produces duplicates
+           as a workaround, we generate extra keys, remove duplicates, and take as many as needed
+           Issue #1078 notes the problem with the generators
+         *)
+        let too_many_keys =
+          Quickcheck.random_value
+            (Quickcheck.Generator.list_with_length (num_keys * 2)
+               Signature_lib.Public_key.Compressed.gen)
+        in
+        let unique_keys =
+          List.dedup_and_sort ~compare:Key.compare too_many_keys
+        in
+        List.take unique_keys num_keys
+
+      let load_ledger_with_keys keys balance =
         let ledger = create () in
-        let keys = List.init n ~f:(fun i -> Int.to_string i) in
-        List.iter keys ~f:(fun k ->
+        List.iter keys ~f:(fun public_key ->
             let action, _ =
-              get_or_create_account_exn ledger k
-                {Account.balance= UInt64.of_int b; public_key= k}
+              get_or_create_account_exn ledger public_key
+                { public_key
+                ; balance= Currency.Balance.of_int balance
+                ; nonce= Account.Nonce.zero
+                ; receipt_chain_hash= Receipt.Chain_hash.empty }
             in
             assert (action = `Added) ) ;
         (ledger, keys)
+
+      let load_ledger num_accounts balance : t * key list =
+        let keys = gen_public_keys num_accounts in
+        load_ledger_with_keys keys balance
     end
 
     module L16 = Make (struct
@@ -56,7 +77,8 @@ let%test_module "test functor on in memory databases" =
       let%bind location = L.location_of_key ledger public_key in
       L.get ledger location
 
-    let gkey = Option.map ~f:(Fn.compose UInt64.to_int Account.balance)
+    let gkey =
+      Option.map ~f:(Fn.compose Currency.Balance.to_int Account.balance)
 
     let%test "key_retrieval" =
       let b = 100 in
@@ -66,17 +88,27 @@ let%test_module "test functor on in memory databases" =
     let%test "idx_retrieval" =
       let b = 100 in
       let ledger, _keys = L16.load_ledger 10 b in
-      L16.get_at_index_exn ledger 0 |> Account.balance = UInt64.of_int 100
+      L16.get_at_index_exn ledger 0
+      |> Account.balance
+      = Currency.Balance.of_int 100
 
     let%test "key_nonexist" =
       let b = 100 in
       let ledger, _ = L16.load_ledger 10 b in
-      None = L16.location_of_key ledger "aintioaerntnearst"
+      let key =
+        Quickcheck.random_value ~seed:(`Deterministic "key_nonexist")
+          Signature_lib.Public_key.Compressed.gen
+      in
+      None = L16.location_of_key ledger key
 
     let%test "idx_nonexist" =
       let b = 100 in
       let ledger, _keys = L16.load_ledger 10 b in
-      None = get (module L16) ledger "1234567"
+      let key =
+        Quickcheck.random_value ~seed:(`Deterministic "idx_nonexist")
+          Signature_lib.Public_key.Compressed.gen
+      in
+      None = get (module L16) ledger key
 
     let%test_unit "modify_account" =
       let initial_balance = 100 in
@@ -86,7 +118,13 @@ let%test_module "test functor on in memory databases" =
         L16.location_of_key ledger public_key |> Option.value_exn
       in
       assert (Some initial_balance = gkey @@ L16.get ledger location) ;
-      L16.set ledger location {balance= UInt64.of_int 50; public_key} ;
+      let account =
+        { Account.balance= Currency.Balance.of_int 50
+        ; public_key
+        ; nonce= Account.Nonce.zero
+        ; receipt_chain_hash= Receipt.Chain_hash.empty }
+      in
+      L16.set ledger location account ;
       assert (Some 50 = gkey @@ L16.get ledger location)
 
     let%test_unit "modify_account_by_idx" =
@@ -94,11 +132,19 @@ let%test_module "test functor on in memory databases" =
       let ledger, _ = L16.load_ledger 10 b in
       let idx = 0 in
       assert (
-        L16.get_at_index_exn ledger idx |> Account.balance = UInt64.of_int 100
-      ) ;
-      let new_b = UInt64.of_int 50 in
+        L16.get_at_index_exn ledger idx
+        |> Account.balance
+        = Currency.Balance.of_int 100 ) ;
+      let new_b = Currency.Balance.of_int 50 in
+      let public_key =
+        Quickcheck.random_value ~seed:(`Deterministic "modify_account_by_idx")
+          Signature_lib.Public_key.Compressed.gen
+      in
       L16.set_at_index_exn ledger idx
-        {balance= new_b; public_key= Int.to_string idx} ;
+        { balance= new_b
+        ; public_key
+        ; nonce= Account.Nonce.zero
+        ; receipt_chain_hash= Receipt.Chain_hash.empty } ;
       assert (L16.get_at_index_exn ledger idx |> Account.balance = new_b)
 
     let compose_hash n hash =
@@ -123,7 +169,7 @@ let%test_module "test functor on in memory databases" =
 
     let%test_unit "merkle_root_edit" =
       let b1 = 10 in
-      let b2 = UInt64.of_int 50 in
+      let b2 = Currency.Balance.of_int 50 in
       let n = 10 in
       let ledger, keys = L16.load_ledger n b1 in
       let public_key = List.nth_exn keys 0 in
@@ -132,13 +178,25 @@ let%test_module "test functor on in memory databases" =
         L16.location_of_key ledger public_key |> Option.value_exn
       in
       assert (Hash.empty_account <> root0) ;
-      L16.set ledger location {balance= b2; public_key} ;
+      L16.set ledger location
+        { balance= b2
+        ; public_key
+        ; nonce= Account.Nonce.zero
+        ; receipt_chain_hash= Receipt.Chain_hash.empty } ;
       let root1 = L16.merkle_root ledger in
       assert (root1 <> root0) ;
-      L16.set ledger location {balance= UInt64.of_int b1; public_key} ;
+      L16.set ledger location
+        { balance= Currency.Balance.of_int b1
+        ; public_key
+        ; nonce= Account.Nonce.zero
+        ; receipt_chain_hash= Receipt.Chain_hash.empty } ;
       let root2 = L16.merkle_root ledger in
       assert (root2 = root0) ;
-      L16.set ledger location {balance= b2; public_key} ;
+      L16.set ledger location
+        { balance= b2
+        ; public_key
+        ; nonce= Account.Nonce.zero
+        ; receipt_chain_hash= Receipt.Chain_hash.empty } ;
       let root3 = L16.merkle_root ledger in
       assert (root3 = root1)
 
@@ -188,7 +246,11 @@ let%test_module "test functor on in memory databases" =
           let location =
             L16.location_of_key ledger public_key |> Option.value_exn
           in
-          L16.set ledger location {balance= UInt64.of_int b2; public_key} ;
+          L16.set ledger location
+            { balance= Currency.Balance.of_int b2
+            ; public_key
+            ; nonce= Account.Nonce.zero
+            ; receipt_chain_hash= Receipt.Chain_hash.empty } ;
           let path = merkle_path (module L16) ledger public_key in
           let account = L16.get ledger location |> Option.value_exn in
           let root = L16.merkle_root ledger in
@@ -256,15 +318,28 @@ let%test_module "test functor on in memory databases" =
       assert (mr_start = L16.merkle_root ledger)
 
     let%test_unit "remove last two accounts is as if they were never there" =
-      let l1, _ = L16.load_ledger 8 1 in
-      let l2, k2 = L16.load_ledger 10 1 in
+      (* NB: because of the issue with duplicates in public _key generation,
+         given numbers of accounts n and m, where m > n, the key list produced by load_ledger on n
+         is not necessarily a prefix of the list for load_ledger on m
+
+         therefore, we produce the key list separately, take a prefix, and pass that to load_ledger_with_keys 
+       *)
+      let all_keys = L16.gen_public_keys 10 in
+      let l1_keys = List.take all_keys 8 in
+      let l1, _ = L16.load_ledger_with_keys l1_keys 1 in
+      let l2_keys = all_keys in
+      let l2, k2 = L16.load_ledger_with_keys l2_keys 1 in
       let keys_to_remove = List.drop k2 8 in
       L16.remove_accounts_exn l2 keys_to_remove ;
       assert (L16.merkle_root l1 = L16.merkle_root l2)
 
     let%test_unit "remove last account is as if it was never there" =
-      let l1, _ = L16.load_ledger 9 1 in
-      let l2, k2 = L16.load_ledger 10 1 in
+      (* see remark in previous test about load_ledger *)
+      let all_keys = L16.gen_public_keys 10 in
+      let l1_keys = List.take all_keys 9 in
+      let l1, _ = L16.load_ledger_with_keys l1_keys 1 in
+      let l2_keys = all_keys in
+      let l2, k2 = L16.load_ledger_with_keys l2_keys 1 in
       let keys_to_remove = [List.last_exn k2] in
       L16.remove_accounts_exn l2 keys_to_remove ;
       assert (L16.merkle_root l1 = L16.merkle_root l2)
@@ -298,6 +373,7 @@ let%test_module "test functor on in memory databases" =
 
     let%test_unit "set_all_accounts_rooted_at . get_all_accounts_rooted_at \
                    works for any root" =
+      Printf.eprintf "SET ALL ACCTS ROOTED\n%!";
       Quickcheck.test (Int.gen_incl 2 10) ~trials:10 ~f:(fun depth ->
           let module L = Make (struct
             let depth = depth

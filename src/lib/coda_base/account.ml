@@ -37,15 +37,18 @@ module Stable = struct
       ; balance: 'amount
       ; nonce: 'nonce
       ; receipt_chain_hash: 'receipt_chain_hash }
-    [@@deriving fields, sexp, bin_io, eq]
+    [@@deriving fields, sexp, bin_io, eq, compare, hash]
+
+    type key = Public_key.Compressed.Stable.V1.t
+    [@@deriving sexp, bin_io, eq, hash, compare]
 
     type t =
-      ( Public_key.Compressed.Stable.V1.t
+      ( key
       , Balance.Stable.V1.t
       , Nonce.Stable.V1.t
       , Receipt.Chain_hash.Stable.V1.t )
       t_
-    [@@deriving sexp, bin_io, eq]
+    [@@deriving sexp, bin_io, eq, hash, compare]
   end
 end
 
@@ -130,6 +133,24 @@ let digest t = Pedersen.State.digest (hash t)
 let empty_hash = digest empty
 
 let pubkey t = t.public_key
+
+let create public_key balance =
+  { public_key
+  ; balance
+  ; nonce= Nonce.zero
+  ; receipt_chain_hash= Receipt.Chain_hash.empty }
+
+let dummy_public_key = Quickcheck.random_value Public_key.Compressed.gen
+let dummy_balance = Quickcheck.random_value Currency.Balance.gen 
+
+let gen = 
+  let open Quickcheck.Let_syntax in
+  return
+    { public_key = dummy_public_key
+    ; balance = dummy_balance
+    ; nonce= Nonce.zero
+    ; receipt_chain_hash= Receipt.Chain_hash.empty
+    }
 
 module Checked = struct
   let hash t =

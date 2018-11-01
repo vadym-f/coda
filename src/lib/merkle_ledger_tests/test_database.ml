@@ -41,12 +41,14 @@ let%test_module "test functor on in memory databases" =
         | `Added -> location
 
       let%test "add and retrieve an account" =
+        Printf.eprintf "ADD AND RETRIEVE AN ACCOUNT\n%!";
         Test.with_instance (fun mdb ->
             let account = Quickcheck.random_value Account.gen in
             let location = create_new_account_exn mdb account in
             Account.equal (Option.value_exn (MT.get mdb location)) account )
 
       let%test "accounts are atomic" =
+        Printf.eprintf "ACCTS ARE ATOMIC\n%!";
         Test.with_instance (fun mdb ->
             let account = Quickcheck.random_value Account.gen in
             let location = create_new_account_exn mdb account in
@@ -60,11 +62,12 @@ let%test_module "test functor on in memory databases" =
 
       let dedup_accounts accounts =
         List.dedup_and_sort accounts ~compare:(fun account1 account2 ->
-            String.compare
+            Signature_lib.Public_key.Compressed.compare
               (Account.public_key account1)
               (Account.public_key account2) )
 
       let%test_unit "length" =
+        Printf.eprintf "LENGTH\n%!";
         Test.with_instance (fun mdb ->
             let open Quickcheck.Generator in
             let max_accounts = Int.min (1 lsl MT.depth) (1 lsl 5) in
@@ -89,12 +92,16 @@ let%test_module "test functor on in memory databases" =
       let%test "get_or_create_acount does not update an account if key \
                 already exists" =
         Test.with_instance (fun mdb ->
-            let public_key = Quickcheck.random_value String.gen in
-            let balance =
-              Quickcheck.random_value (Int.gen_incl 1 Int.max_value)
+            let public_key =
+              Quickcheck.random_value Signature_lib.Public_key.Compressed.gen
             in
+            let balance = Quickcheck.random_value Currency.Balance.gen in
             let account = Account.create public_key balance in
-            let account' = Account.create public_key (balance + 1) in
+            let balance' =
+              Option.value_exn
+                (Currency.Balance.add_amount balance (Currency.Amount.of_int 1))
+            in
+            let account' = Account.create public_key balance' in
             let location = create_new_account_exn mdb account in
             let action, location' =
               MT.get_or_create_account_exn mdb public_key account'
@@ -105,6 +112,7 @@ let%test_module "test functor on in memory databases" =
 
       let%test_unit "get_or_create_account t account = location_of_key \
                      account.key" =
+        Printf.eprintf "GET OR CREATE\n%!";
         Test.with_instance (fun mdb ->
             let accounts_gen =
               let open Quickcheck.Let_syntax in
@@ -114,7 +122,7 @@ let%test_module "test functor on in memory databases" =
             in
             let accounts = Quickcheck.random_value accounts_gen in
             Sequence.of_list accounts
-            |> Sequence.iter ~f:(fun ({public_key; _} as account) ->
+            |> Sequence.iter ~f:(fun ({Account.public_key; _} as account) ->
                    let _, location =
                      MT.get_or_create_account_exn mdb public_key account
                    in
@@ -125,6 +133,7 @@ let%test_module "test functor on in memory databases" =
 
       let%test_unit "set_inner_hash_at_addr_exn(address,hash); \
                      get_inner_hash_at_addr_exn(address) = hash" =
+        Printf.eprintf "SET INNER HASH\n%!";
         let random_hash =
           Hash.hash_account @@ Quickcheck.random_value Account.gen
         in
@@ -137,6 +146,7 @@ let%test_module "test functor on in memory databases" =
                 assert (Hash.equal result random_hash) ) )
 
       let random_accounts max_height =
+        Printf.eprintf "RANDOM ACCTS\n%!";
         let num_accounts = 1 lsl max_height in
         Quickcheck.random_value
           (Quickcheck.Generator.list_with_length num_accounts Account.gen)
@@ -156,6 +166,7 @@ let%test_module "test functor on in memory databases" =
       let%test_unit "If the entire database is full, \
                      set_all_accounts_rooted_at_exn(address,accounts);get_all_accounts_rooted_at_exn(address) \
                      = accounts" =
+        Printf.eprintf "IF FULL\n%!";
         Test.with_instance (fun mdb ->
             let max_height = Int.min MT.depth 5 in
             populate_db mdb max_height ;
@@ -183,13 +194,23 @@ let%test_module "test functor on in memory databases" =
         Test.with_instance (fun mdb ->
             let gift = 1 in
             let balance_gen = Int.gen_incl gift (Int.max_value - gift) in
-            let public_key = "pk" in
-            let balance = Quickcheck.random_value balance_gen in
+            let public_key =
+              Quickcheck.random_value ~seed:(`Deterministic "pk")
+                Signature_lib.Public_key.Compressed.gen
+            in
+            let balance =
+              Currency.Balance.of_int @@ Quickcheck.random_value balance_gen
+            in
             let account = Account.create public_key balance in
             let account_location = create_new_account_exn mdb account in
             let mdb_copy = MT.copy mdb in
+            let balance_with_gift =
+              Option.value_exn
+                (Currency.Balance.add_amount balance
+                   (Currency.Amount.of_int gift))
+            in
             let updated_account =
-              Account.set_balance account (Balance.of_int (balance + gift))
+              {account with Account.balance= balance_with_gift}
             in
             MT.set mdb_copy account_location updated_account ;
             let account' = MT.get mdb account_location |> Option.value_exn in
@@ -218,6 +239,7 @@ let%test_module "test functor on in memory databases" =
 
       let%test_unit "set_at_index_exn t index  account; get_at_index_exn t \
                      index = account" =
+        Printf.eprintf "SET AT INDEX\n%!";
         Test.with_instance (fun mdb ->
             let max_height = Int.min MT.depth 5 in
             test_subtree_range mdb max_height ~f:(fun index ->
@@ -264,11 +286,17 @@ let%test_module "test functor on in memory databases" =
       let%test_unit "Add 2^d accounts (for testing, d is small)" =
         if Test.depth <= 8 then
           Test.with_instance (fun mdb ->
-              let gen_balance = Int.gen_incl 1 Int.max_value in
               let accounts =
-                List.init (1 lsl Test.depth) ~f:(fun public_key ->
-                    Account.create (Int.to_string public_key)
-                      (Quickcheck.random_value gen_balance) )
+                List.init (1 lsl Test.depth) ~f:(fun i ->
+                    let public_key =
+                      Quickcheck.random_value
+                        ~seed:(`Deterministic (Int.to_string i))
+                        Signature_lib.Public_key.Compressed.gen
+                    in
+                    let balance =
+                      Quickcheck.random_value Currency.Balance.gen
+                    in
+                    Account.create public_key balance )
               in
               List.iter accounts ~f:(fun account ->
                   ignore @@ create_new_account_exn mdb account ) ;

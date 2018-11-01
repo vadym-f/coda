@@ -140,17 +140,11 @@ let create public_key balance =
   ; nonce= Nonce.zero
   ; receipt_chain_hash= Receipt.Chain_hash.empty }
 
-let dummy_public_key = Quickcheck.random_value Public_key.Compressed.gen
-let dummy_balance = Quickcheck.random_value Currency.Balance.gen 
-
 let gen = 
   let open Quickcheck.Let_syntax in
-  return
-    { public_key = dummy_public_key
-    ; balance = dummy_balance
-    ; nonce= Nonce.zero
-    ; receipt_chain_hash= Receipt.Chain_hash.empty
-    }
+  let%bind public_key = Public_key.Compressed.gen in
+  let%bind balance = Currency.Balance.gen in
+  return (create public_key balance)
 
 module Checked = struct
   let hash t =

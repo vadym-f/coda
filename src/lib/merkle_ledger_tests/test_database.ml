@@ -335,10 +335,10 @@ let%test_module "test functor on in memory databases" =
     end
 
     module Mdb_d4 = Make_db (Depth_4)
-
+(*
     module Depth_30 = struct
       let depth = 30
     end
 
-    module Mdb_d30 = Make_db (Depth_30)
+    module Mdb_d30 = Make_db (Depth_30) *)
   end )

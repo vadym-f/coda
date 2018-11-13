@@ -253,6 +253,30 @@ let%test_module "Test mask connected to underlying Merkle tree" =
               assert (
                 List.equal ~equal:Account.equal accounts retrieved_accounts )
           )
+
+      let%test_unit "removing accounts restores Merkle root" =
+        Test.with_instances (fun maskable mask ->
+            let attached_mask = Maskable.register_mask maskable mask in
+
+***** PUT some accounts in mask, others in parent ************
+
+            let num_accounts = 5 in
+            let keys = Key.gen_keys num_accounts in
+            let balances =
+              Quickcheck.random_value
+                (Quickcheck.Generator.list_with_length num_accounts Balance.gen)
+            in
+            let accounts = List.map2_exn keys balances ~f:Account.create in
+            let merkle_root0 = MT.merkle_root mdb in
+            List.iter accounts ~f:(fun account ->
+                ignore @@ create_new_account_exn mdb account ) ;
+            let merkle_root1 = MT.merkle_root mdb in
+            (* adding accounts should change the Merkle root *)
+            assert (not (Hash.equal merkle_root0 merkle_root1)) ;
+            MT.remove_accounts_exn mdb keys ;
+            (* should see original Merkle root after removing the accounts *)
+            let merkle_root2 = MT.merkle_root mdb in
+            assert (Hash.equal merkle_root2 merkle_root0) )
     end
 
     module type Depth_S = sig

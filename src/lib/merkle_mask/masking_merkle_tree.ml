@@ -86,14 +86,6 @@ struct
       Location.Table.set t.account_tbl ~key:location ~data:account ;
       set_location t (Account.public_key account) location
 
-    let remove_account t location =
-      let account = Option.value_exn (find_account t location) in
-      Location.Table.remove t.account_tbl location ;
-      (* TODO : use stack database to save unused location, which can be 
-        used when allocating a location
-      *)
-      Key.Table.remove t.location_tbl (Account.public_key account)
-
     (* a read does a lookup in the account_tbl; if that fails, delegate to parent *)
     let get t location =
       match find_account t location with
@@ -172,6 +164,25 @@ struct
       | Some hash -> hash
       | None -> Base.merkle_root (get_parent t)
 
+    let remove_account_and_update_hashes t location =
+      (* remove account and key from tables *)
+      let account = Option.value_exn (find_account t location) in
+      Location.Table.remove t.account_tbl location ;
+      (* TODO : use stack database to save unused location, which can be 
+        used when allocating a location
+      *)
+      Key.Table.remove t.location_tbl (Account.public_key account);
+      (* update hashes *)
+      let account_address = Location.to_path_exn location in
+      let account_hash = Hash.empty_account in
+      let merkle_path = merkle_path t location in
+      let addresses_and_hashes =
+        addresses_and_hashes_from_merkle_path_exn merkle_path
+          account_address account_hash
+      in
+      List.iter addresses_and_hashes ~f:(fun (addr, hash) ->
+          set_hash t addr hash)
+
     (* a write writes only to the mask, parent is not involved 
      need to update both account and hash pieces of the mask
        *)
@@ -195,17 +206,7 @@ struct
       | Some existing_account ->
           if Account.equal account existing_account then (
             (* optimization: remove from account table *)
-            remove_account t location ;
-            (* update hashes *)
-            let account_address = Location.to_path_exn location in
-            let account_hash = Hash.empty_account in
-            let merkle_path = merkle_path t location in
-            let addresses_and_hashes =
-              addresses_and_hashes_from_merkle_path_exn merkle_path
-                account_address account_hash
-            in
-            List.iter addresses_and_hashes ~f:(fun (addr, hash) ->
-                set_hash t addr hash ) )
+            remove_account_and_update_hashes t location
       | None -> ()
 
     (* as for accounts, we see if we have it in the mask, else delegate to parent *)
@@ -295,9 +296,27 @@ struct
       assert (Addr.depth address <= Base.depth) ;
       get_hash t address |> Option.value_exn
 
-    (* database also does not implement remove_accounts_exn *)
-    let remove_accounts_exn _t _accounts =
-      failwith "remove_accounts_exn: not implemented"
+    let remove_accounts_exn t keys =
+      ***** need to remove accounts from parent ****
+                      find out which keys we don't have in mask, see
+                       if they can all be removed from parent
+                       if those raise an exception, propagate that exception here
+                       if those are OK, we know we'll succeed with remaining keys *************                                                                                
+
+
+      let locations = 
+        (* if we don't have a location for all keys, raise an exception *)
+        let rec loop keys accum =
+          match keys with
+          | [] -> accum (* no need to reverse *)
+          | (key::rest) ->
+             match find_location t key with
+             | Some loc -> loop rest (loc::accum)
+             | None -> raise (Db_error.Db_exception Account_location_not_found)
+        in
+        loop keys []
+      in
+      List.iter locations ~f:(remove_account_and_update_hashes t)
 
     let destroy t =
       Location.Table.iteri t.account_tbl ~f:(fun ~key ~data:_ ->

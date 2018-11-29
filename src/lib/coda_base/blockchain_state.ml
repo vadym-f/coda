@@ -154,11 +154,13 @@ end) : S = struct
 
   let set_timestamp t timestamp = {t with timestamp}
 
+  let genesis_ledger_hash =
+        Ledger.merkle_root Genesis_ledger.t
+
   let genesis =
-    { ledger_builder_hash= Ledger_builder_hash.dummy
-    ; ledger_hash=
-        Frozen_ledger_hash.of_ledger_hash
-        @@ Ledger.merkle_root Genesis_ledger.t
+    { ledger_builder_hash=
+      Ledger_builder_hash.dummy genesis_ledger_hash
+    ; ledger_hash= Frozen_ledger_hash.of_ledger_hash genesis_ledger_hash
     ; timestamp= Genesis_state_timestamp.value |> Block_time.of_time }
 
   let to_string_record t =

@@ -174,12 +174,17 @@ module Make (Inputs : Inputs_intf) :
     (* TODO: We can make change-resolving more intelligent if different
     * concurrent processes took different times to finish. Since we
     * serialize to one job at a time this shouldn't happen anyway though *)
+    assert_tip_sanity (old_state |> Transition_logic_state.locked_tip);
     let old_longest_branch_tip =
       old_state |> Transition_logic_state.longest_branch_tip
     in
+    assert_tip_sanity old_longest_branch_tip;
     let new_longest_branch_tip =
       List.find_map changes ~f:(function
-        | Transition_logic_state.Change.Longest_branch_tip tip -> Some tip
+        | Transition_logic_state.Change.Longest_branch_tip tip ->
+            Logger.fatal t.log !"Storing ledger builder hash %{sexp: Ledger_builder_hash.t} when transition is %{sexp: External_transition.t} and tip's with_has is: %{sexp: State_hash.t}" (Ledger_builder.hash @@ Tip.ledger_builder tip.data) transition tip.hash;
+            assert_tip_sanity tip;
+            Some tip
         | _ -> None )
     in
     let new_state =
@@ -189,6 +194,7 @@ module Make (Inputs : Inputs_intf) :
     match new_longest_branch_tip with
     | None -> Deferred.unit
     | Some new_longest_branch_tip ->
+        assert_tip_sanity new_longest_branch_tip;
         if
           not
             (Protocol_state.equal_value
@@ -237,6 +243,8 @@ module Make (Inputs : Inputs_intf) :
           and longest_branch_tip =
             Transition_logic_state.longest_branch_tip old_state
           in
+          assert_tip_sanity locked_tip;
+          assert_tip_sanity longest_branch_tip;
           let new_head, _new_tip = locked_and_best new_tree in
           let old_head, _old_tip = locked_and_best old_tree in
           let open Interruptible.Let_syntax in
@@ -250,9 +258,11 @@ module Make (Inputs : Inputs_intf) :
           in
           let work =
             let locked_tip = With_hash.map locked_tip ~f:Tip.copy in
+            assert_tip_sanity locked_tip;
             let longest_branch_tip =
               With_hash.map longest_branch_tip ~f:Tip.copy
             in
+            assert_tip_sanity longest_branch_tip;
             (* Adjust the locked_ledger if necessary *)
             let%bind locked_tip_changed, locked_tip =
               if transition_is_parent_of ~child:new_head ~parent:old_head then
@@ -276,7 +286,11 @@ module Make (Inputs : Inputs_intf) :
             trace_event "step over path start" ;
             let last_transition = List.last_exn path.Path.path in
             (* Now step over the path *)
+            assert_tip_sanity tip;
             assert (is_materialization_of tip path.Path.source) ;
+            Logger.debug logger !"Path is source:%{sexp: (Protocol_state.value, State_hash.t) With_hash.t} ;; %{sexp: (External_transition.t, State_hash.t) With_hash.t list}" path.Path.source path.Path.path;
+            Logger.debug logger !"Tip is: %{sexp: (Tip.t, State_hash.t) With_hash.t}" tip;
+            Logger.debug logger !"Tip's ledger builder is: %{sexp: Ledger_builder_hash.t}" (Ledger_builder.hash @@ Tip.ledger_builder tip.data);
             let%bind result =
               List.fold path.Path.path ~init:(Interruptible.return (Some tip))
                 ~f:(fun work curr ->
@@ -289,6 +303,7 @@ module Make (Inputs : Inputs_intf) :
                           (* TODO: Punish sender *)
                           Logger.warn logger "Received malicious transition %s"
                             (Error.to_string_hum e) ;
+                          assert false;
                           return None ) )
             in
             trace_event "step over path end" ;
@@ -414,8 +429,10 @@ module Make (Inputs : Inputs_intf) :
     let longest_branch_tip =
       Transition_logic_state.longest_branch_tip old_state
     and ktree = Transition_logic_state.ktree old_state in
+    Logger.fatal t.log !"Loading ledger builder hash %{sexp: Ledger_builder_hash.t}" (Ledger_builder.hash @@ Tip.ledger_builder longest_branch_tip.data);
     match ktree with
-    | None -> (
+    | None ->
+        let longest_branch_tip = {With_hash.data=Tip.copy longest_branch_tip.data; hash=longest_branch_tip.hash} in
         let source_state = (With_hash.data longest_branch_tip).state in
         let target_state =
           External_transition.protocol_state
@@ -423,8 +440,10 @@ module Make (Inputs : Inputs_intf) :
         in
         if is_parent_of ~child:transition_with_hash ~parent:longest_branch_tip
         then (
+          Logger.debug t.log "Bootstrapping from genesis" ;
           (* Bootstrap from genesis *)
           let tree = Transition_tree.singleton transition_with_hash in
+          Logger.debug t.log "Taking a single step" ;
           match%bind
             Step.step t.log longest_branch_tip transition_with_hash
           with
@@ -434,6 +453,7 @@ module Make (Inputs : Inputs_intf) :
                 ; Transition_logic_state.Change.Longest_branch_tip tip
                 ; Transition_logic_state.Change.Locked_tip tip ]
               in
+              Logger.debug t.log "Mutating state after step" ;
               let%map () =
                 mutate_state t old_state changes
                   (With_hash.data transition_with_hash)
@@ -443,15 +463,19 @@ module Make (Inputs : Inputs_intf) :
               (* TODO: Punish sender *)
               Logger.info t.log "Recieved malicious transition %s"
                 (Error.to_string_hum e) ;
+              assert false;
               Deferred.return None )
-        else
+        else (
+          Logger.debug t.log "Not a bootstrap" ;
           match
             Consensus_mechanism.select
               ~existing:(Protocol_state.consensus_state source_state)
               ~candidate:(Protocol_state.consensus_state target_state)
               ~logger:t.log ~time_received
           with
-          | `Keep -> return None
+          | `Keep ->
+              Logger.debug t.log "Keep existing" ;
+              return None
           | `Take ->
               let lh =
                 With_hash.data transition_with_hash
@@ -459,6 +483,7 @@ module Make (Inputs : Inputs_intf) :
                 |> Protocol_state.blockchain_state
                 |> Blockchain_state.ledger_hash
               in
+              assert false ;
               Logger.debug t.log
                 !"Branch catchup for transition: lh:%{sexp: \
                   Frozen_ledger_hash.t} state:%{sexp:Protocol_state.value}"

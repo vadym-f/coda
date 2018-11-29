@@ -25,7 +25,7 @@ module Stable : sig
   end
 end
 
-val dummy : t
+val dummy : Ledger_hash.t -> t
 
 module Aux_hash : sig
   type t

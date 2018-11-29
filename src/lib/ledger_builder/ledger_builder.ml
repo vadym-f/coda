@@ -1018,6 +1018,8 @@ end = struct
   (* TODO: when we move to a disk-backed db, this should call "Ledger.commit_changes" at the end. *)
   let apply_diff t (diff : Ledger_builder_diff.t) ~logger =
     let open Result_with_rollback.Let_syntax in
+    Logger.debug logger !"Prev hash in diff: %{sexp: Ledger_builder_hash.t}" (diff.prev_hash);
+    Logger.debug logger !"Hash t at start of apply diff: %{sexp: Ledger_builder_hash.t}" (hash t);
     let apply_pre_diff_with_at_most_two
         (pre_diff1 : Ledger_builder_diff.diff_with_at_most_two_coinbase) =
       let coinbase_parts =
@@ -1035,6 +1037,7 @@ end = struct
       in
       apply_pre_diff t coinbase_added diff.creator pre_diff2.diff
     in
+    Logger.debug logger !"Hash t after prediffs: %{sexp: Ledger_builder_hash.t}" (hash t);
     let%bind () =
       let curr_hash = hash t in
       check_or_error

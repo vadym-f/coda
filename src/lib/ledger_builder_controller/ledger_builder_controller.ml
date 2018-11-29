@@ -42,20 +42,24 @@ end = struct
     [@@deriving make]
   end
 
+  module Ops = Tip_ops.Make (Inputs)
   module Transition_logic_inputs = struct
     include Inputs
 
     module Step = struct
       let apply' t diff logger =
         let open Deferred.Or_error.Let_syntax in
+        Logger.debug logger "Attempting apply ledger builder";
         let%map _, `Ledger_proof proof = Ledger_builder.apply t diff ~logger in
+        Logger.debug logger "Completed apply ledger builder successfully";
         Option.map proof ~f:(fun proof ->
             ( Ledger_proof.statement proof |> Ledger_proof_statement.target
             , proof ) )
 
-      let step logger {With_hash.data= tip; hash= tip_hash}
+      let step logger ({With_hash.data= tip; hash= tip_hash} as old_tip)
           {With_hash.data= transition; hash= transition_target_hash} =
         let open Deferred.Or_error.Let_syntax in
+        Ops.assert_tip_sanity old_tip;
         let old_state = tip.Tip.state in
         let new_state = External_transition.protocol_state transition in
         let%bind verified =
@@ -63,6 +67,7 @@ end = struct
             (External_transition.protocol_state_proof transition)
             new_state
         in
+        Logger.debug logger !"Attempting to step from state_hash %{sexp: State_hash.t} to %{sexp: State_hash.t}" tip_hash transition_target_hash;
         let%bind ledger_hash =
           match%map
             apply' tip.ledger_builder
@@ -89,11 +94,15 @@ end = struct
           then Deferred.return (Ok ())
           else Deferred.Or_error.error_string "TODO: Punish"
         in
-        { With_hash.data=
-            { tip with
-              state= new_state
-            ; proof= External_transition.protocol_state_proof transition }
-        ; hash= transition_target_hash }
+        let new_tip =
+          { With_hash.data=
+              { tip with
+                state= new_state
+              ; proof= External_transition.protocol_state_proof transition }
+          ; hash= transition_target_hash }
+        in
+        Ops.assert_tip_sanity new_tip;
+        new_tip
     end
 
     module Transition_logic_state = Transition_logic_state.Make (Inputs)

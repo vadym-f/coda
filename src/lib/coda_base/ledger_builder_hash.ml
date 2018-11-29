@@ -43,8 +43,8 @@ let ledger_hash {ledger_hash; _} = ledger_hash
 
 let aux_hash {aux_hash; _} = aux_hash
 
-let dummy =
-  {ledger_hash= Ledger_hash.of_hash Field.zero; aux_hash= Aux_hash.dummy}
+let dummy genesis_ledger_hash =
+  {ledger_hash= genesis_ledger_hash ; aux_hash= Aux_hash.dummy}
 
 let to_string {ledger_hash; aux_hash} =
   Printf.sprintf "%s:%s"

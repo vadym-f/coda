@@ -20,7 +20,7 @@ module Base = struct
     end
 
     module Ledger_hash : sig
-      type t [@@deriving eq, bin_io, sexp, eq]
+      type t [@@deriving eq, bin_io, sexp, eq, compare]
     end
 
     module Frozen_ledger_hash : sig

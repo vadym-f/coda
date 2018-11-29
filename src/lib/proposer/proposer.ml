@@ -144,16 +144,19 @@ module Make (Inputs : Inputs_intf) :
     let%bind diff, next_ledger_builder_hash, ledger_proof_opt =
       Interruptible.uninterruptible
         (let open Deferred.Let_syntax in
+        Logger.fatal logger !"Ledger builder hash before create diff %{sexp: Ledger_builder_hash.t}" (Ledger_builder.hash ledger_builder) ;
         let diff =
           Ledger_builder.create_diff ledger_builder
             ~self:(Public_key.compress keypair.public_key)
             ~logger ~transactions_by_fee:transactions ~get_completed_work
         in
+        Logger.fatal logger !"Ledger builder hash after create diff %{sexp: Ledger_builder_hash.t}" (Ledger_builder.hash ledger_builder) ;
         let lb2 = Ledger_builder.copy ledger_builder in
         let%map ( `Hash_after_applying next_ledger_builder_hash
                 , `Ledger_proof ledger_proof_opt ) =
           Ledger_builder.apply_diff_unchecked lb2 diff
         in
+        Logger.fatal logger !"Ledger builder hash after a copy gets mutated %{sexp: Ledger_builder_hash.t}" (Ledger_builder.hash ledger_builder) ;
         (diff, next_ledger_builder_hash, ledger_proof_opt))
     in
     let%bind protocol_state, consensus_transition_data =
@@ -249,6 +252,11 @@ module Make (Inputs : Inputs_intf) :
               Logger.info logger
                 !"Begining to propose off of tip %{sexp: Tip.t}"
                 tip ;
+
+              [%test_result: Ledger_hash.t]
+                ~message:
+                  "Hash of ledger-builder on tip's is the ledger builder's hash"
+                ~expect:(Ledger_builder_hash.ledger_hash @@ Blockchain_state.ledger_builder_hash @@ Protocol_state.blockchain_state @@ fst @@ tip.Tip.protocol_state) (Ledger_builder_hash.ledger_hash @@ Ledger_builder.hash @@ tip.Tip.ledger_builder);
               let previous_protocol_state, previous_protocol_state_proof =
                 tip.protocol_state
               in

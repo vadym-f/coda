@@ -5,6 +5,16 @@ module Make (Inputs : Inputs.Base.S) = struct
   open Inputs
   open Consensus_mechanism
 
+  let assert_tip_sanity {With_hash.data = tip; hash = tip_state_hash} =
+    [%test_result: State_hash.t]
+      ~message:
+        "Hash of protocol state in tip is the tip_state_hash"
+      ~expect:tip_state_hash (Protocol_state.hash tip.Tip.state) ;
+    [%test_result: Ledger_hash.t]
+      ~message:
+        "Hash of ledger-builder on tip's is the ledger builder's hash"
+      ~expect:(Ledger_builder_hash.ledger_hash @@ Blockchain_state.ledger_builder_hash @@ Protocol_state.blockchain_state @@ tip.Tip.state) (Ledger_builder_hash.ledger_hash @@ Ledger_builder.hash @@ tip.Tip.ledger_builder)
+
   let assert_materialization_of {With_hash.data= t; hash= tip_state_hash}
       {With_hash.data= transition; hash= transition_state_hash} =
     [%test_result: State_hash.t]

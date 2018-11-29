@@ -502,6 +502,19 @@ module Make (Inputs : Inputs_intf) = struct
         let consensus_local_state =
           Consensus_mechanism.Local_state.create config.propose_keypair
         in
+        let genesis_tip =
+          { Tip.ledger_builder=
+              Ledger_builder.create
+                ~ledger:
+                  (Ledger.register_mask Genesis.ledger
+                     (Ledger.Mask.create ()))
+          ; state= Genesis.state
+          ; proof= Genesis.proof }
+        in
+        [%test_result: Ledger_hash.t]
+          ~message:
+            "Hash of ledger-builder on tip's is the ledger builder's hash"
+          ~expect:(Ledger_builder_hash.ledger_hash @@ Consensus_mechanism.Blockchain_state.ledger_builder_hash @@ Consensus_mechanism.Protocol_state.blockchain_state @@ genesis_tip.Tip.state) (Ledger_builder_hash.ledger_hash @@ Ledger_builder.hash @@ genesis_tip.Tip.ledger_builder);
         let lbc_deferred =
           Ledger_builder_controller.create
             (Ledger_builder_controller.Config.make
@@ -509,14 +522,7 @@ module Make (Inputs : Inputs_intf) = struct
                  (Option.map config.propose_keypair ~f:(fun k ->
                       k.public_key |> Public_key.compress ))
                ~parent_log:config.log ~net_deferred:(Ivar.read net_ivar)
-               ~genesis_tip:
-                 { ledger_builder=
-                     Ledger_builder.create
-                       ~ledger:
-                         (Ledger.register_mask Genesis.ledger
-                            (Ledger.Mask.create ()))
-                 ; state= Genesis.state
-                 ; proof= Genesis.proof }
+               ~genesis_tip
                ~consensus_local_state ~ledger:Genesis.ledger
                ~longest_tip_location:config.ledger_builder_persistant_location
                ~external_transitions:external_transitions_reader ())

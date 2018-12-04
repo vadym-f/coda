@@ -483,8 +483,14 @@ module type Ledger_builder_diff_intf = sig
   [@@deriving sexp, bin_io]
 
   type t =
-    {pre_diffs: pre_diffs; prev_hash: ledger_builder_hash; creator: public_key}
+    | Empty
+    | Not_empty of
+      { pre_diffs: pre_diffs
+      ; prev_hash: ledger_builder_hash
+      ; creator: public_key }
   [@@deriving sexp, bin_io]
+
+  val empty : t
 
   module With_valid_signatures_and_proofs : sig
     type diff =

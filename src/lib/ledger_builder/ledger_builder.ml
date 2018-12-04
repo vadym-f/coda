@@ -169,6 +169,8 @@ end) :
       ; creator: Compressed_public_key.t }
   [@@deriving sexp, bin_io]
 
+  let empty = Empty
+
   module With_valid_signatures_and_proofs = struct
     type diff =
       { completed_works: Completed_work.Checked.t list
@@ -192,7 +194,8 @@ end) :
     [@@deriving sexp]
 
     type t =
-      { pre_diffs: pre_diffs
+      | Empty
+      | Not_empty of { pre_diffs: pre_diffs
       ; prev_hash: Ledger_builder_hash.t
       ; creator: Compressed_public_key.t }
     [@@deriving sexp]
@@ -233,8 +236,10 @@ end) :
     in
     {diff= forget_diff diff; coinbase_added= forget_cw}
 
-  let forget (t : With_valid_signatures_and_proofs.t) =
-    { pre_diffs=
+  let forget (t : With_valid_signatures_and_proofs.t) = function
+    | With_valid_signatures_and_proofs.Empty -> With_valid_signatures_and_proofs.Empty
+
+    With_valid_signatures_and_proofs.Not_empty { pre_diffs=
         Either.map t.pre_diffs ~first:forget_pre_diff_with_at_most_one
           ~second:(fun d ->
             ( forget_pre_diff_with_at_most_two (fst d)
@@ -1024,6 +1029,9 @@ end = struct
   (* TODO: when we move to a disk-backed db, this should call "Ledger.commit_changes" at the end. *)
   let apply_diff t (diff : Ledger_builder_diff.t) ~logger =
     let open Result_with_rollback.Let_syntax in
+    match diff with
+    | Ledger_builder_diff.Empty -> return ()
+    | Ledger_builder_diff.Not_empty diff ->
     let apply_pre_diff_with_at_most_two
         (pre_diff1 : Ledger_builder_diff.diff_with_at_most_two_coinbase) =
       let coinbase_parts =

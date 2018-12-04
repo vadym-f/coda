@@ -200,7 +200,7 @@ end) :
       ; creator: Compressed_public_key.t }
     [@@deriving sexp]
 
-    let user_commands t =
+    let user_commands (t : With_valid_signatures_and_proofs.t) =
       Either.value_map t.pre_diffs
         ~first:(fun d -> d.diff.user_commands)
         ~second:(fun d ->
@@ -238,14 +238,13 @@ end) :
 
   let forget (t : With_valid_signatures_and_proofs.t) = function
     | With_valid_signatures_and_proofs.Empty -> With_valid_signatures_and_proofs.Empty
-
-    With_valid_signatures_and_proofs.Not_empty { pre_diffs=
-        Either.map t.pre_diffs ~first:forget_pre_diff_with_at_most_one
-          ~second:(fun d ->
-            ( forget_pre_diff_with_at_most_two (fst d)
-            , forget_pre_diff_with_at_most_one (snd d) ) )
-    ; prev_hash= t.prev_hash
-    ; creator= t.creator }
+    | With_valid_signatures_and_proofs.Not_empty ->
+       { pre_diffs=  Either.map t.pre_diffs ~first:forget_pre_diff_with_at_most_one
+                       ~second:(fun d ->
+                         ( forget_pre_diff_with_at_most_two (fst d)
+                         , forget_pre_diff_with_at_most_one (snd d) ) )
+       ; prev_hash= t.prev_hash
+       ; creator= t.creator }
 
   let user_commands (t : t) =
     Either.value_map t.pre_diffs

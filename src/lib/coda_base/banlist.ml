@@ -2,6 +2,7 @@ open Core
 open Async
 open Banlist_lib.Banlist
 open Unsigned
+open Network_peer
 
 module Punishment_record = struct
   type time = Time.t
@@ -12,8 +13,8 @@ module Punishment_record = struct
 end
 
 module Punished_db =
-  Punished_db.Make (Host_and_port) (Time) (Punishment_record)
-    (Key_value_database.Make_mock (Host_and_port) (Punishment_record))
+  Punished_db.Make (Peer) (Time) (Punishment_record)
+    (Key_value_database.Make_mock (Peer) (Punishment_record))
 
 let ban_threshold = 100
 
@@ -28,11 +29,10 @@ module Score_mechanism = struct
       | Send_bad_aux -> ban_threshold / 4 )
 end
 
-module Suspicious_db = Key_value_database.Make_mock (Host_and_port) (Score)
+module Suspicious_db = Key_value_database.Make_mock (Peer) (Score)
 
 module Banlist = struct
-  include Make (Host_and_port) (Punishment_record) (Suspicious_db)
-            (Punished_db)
+  include Make (Peer) (Punishment_record) (Suspicious_db) (Punished_db)
             (Score_mechanism)
 
   let create = create ~ban_threshold

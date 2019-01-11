@@ -2,6 +2,7 @@ open Core
 open Async
 open Pipe_lib
 open Kademlia
+open Network_peer
 open O1trace
 module Membership = Membership.Haskell
 
@@ -21,7 +22,7 @@ module type Config_intf = sig
   type t =
     { timeout: Time.Span.t
     ; target_peer_count: int
-    ; initial_peers: Host_and_port.t list
+    ; initial_peers: Peer.t list
     ; me: Peer.t
     ; conf_dir: string
     ; parent_log: Logger.t
@@ -72,7 +73,7 @@ module Make (Message : Message_intf) : S with type msg := Message.msg = struct
     type t =
       { timeout: Time.Span.t
       ; target_peer_count: int
-      ; initial_peers: Host_and_port.t list
+      ; initial_peers: Peer.t list
       ; me: Peer.t
       ; conf_dir: string
       ; parent_log: Logger.t

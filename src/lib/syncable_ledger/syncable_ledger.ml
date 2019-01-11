@@ -1,6 +1,7 @@
 open Core
 open Async_kernel
 open Pipe_lib
+open Network_peer
 
 let rec funpow n f r = if n > 0 then funpow (n - 1) f (f r) else r
 
@@ -474,7 +475,7 @@ module Make
             | Error e ->
                 Logger.faulty_peer t.log
                   !"Got error from when trying to add child_hash %{sexp: \
-                    Hash.t} %s %{sexp: Host_and_port.t}"
+                    Hash.t} %s %{sexp: Peer.t}"
                   h' (Error.to_string_hum e)
                   (Envelope.Incoming.sender env) ;
                 ()

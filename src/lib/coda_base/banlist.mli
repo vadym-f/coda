@@ -1,5 +1,6 @@
 open Core_kernel
 open Banlist_lib
+open Network_peer
 
 module Punishment_record :
   Banlist.Punishment.Record.S
@@ -8,7 +9,7 @@ module Punishment_record :
 
 include
   Banlist.S
-  with type peer := Host_and_port.t
+  with type peer := Peer.t
    and type record := Punishment_record.t
    and type offense := Banlist.Offense.t
 

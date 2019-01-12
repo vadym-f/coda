@@ -5,6 +5,7 @@ open Core
 open Async
 open Coda_base
 open Blockchain_snark
+open Network_peer
 open Cli_lib
 open Coda_main
 module YJ = Yojson.Safe
@@ -184,10 +185,12 @@ let daemon log =
            "work-selection" ~default:Protocols.Coda_pow.Work_selection.Seq
            work_selection_flag
        in
-       let peers =
+       let peers : Communications_peer.t list =
          List.concat
            [ peers
-           ; List.map ~f:Host_and_port.of_string
+           ; List.map ~f:(fun s ->
+                 Host_and_port.of_string s
+                 |> Communications_peer.of_host_and_port )
              @@ or_from_config
                   (Fn.compose Option.some
                      (YJ.Util.convert_each YJ.Util.to_string))
@@ -201,14 +204,16 @@ let daemon log =
          | [] -> (
              let peers_path = conf_dir ^/ "peers" in
              match%bind
-               Reader.load_sexp peers_path [%of_sexp: Host_and_port.t list]
+               Reader.load_sexp peers_path
+                 [%of_sexp: Communications_peer.t list]
              with
              | Ok ls -> return ls
              | Error e ->
                  let default_initial_peers = [] in
                  let%map () =
                    Writer.save_sexp peers_path
-                     ([%sexp_of: Host_and_port.t list] default_initial_peers)
+                     ([%sexp_of: Communications_peer.t list]
+                        default_initial_peers)
                  in
                  [] )
        in

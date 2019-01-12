@@ -38,7 +38,7 @@ module Input = struct
     ; program_dir: string
     ; external_port: int
     ; discovery_port: int
-    ; peers: Host_and_port.t list }
+    ; peers: Network_peer.Peer.t list }
   [@@deriving bin_io]
 end
 
@@ -56,7 +56,7 @@ end
 
 module T = struct
   module Peers = struct
-    type t = Kademlia.Peer.t List.t [@@deriving bin_io]
+    type t = Network_peer.Peer.t List.t [@@deriving bin_io]
   end
 
   module State_hashes = struct
@@ -234,7 +234,9 @@ module T = struct
             ; conf_dir
             ; initial_peers= peers
             ; me=
-                (Host_and_port.create ~host ~port:discovery_port, external_port)
+                Network_peer.Peer.create
+                  (Unix.Inet_addr.of_string host)
+                  ~discovery_port ~communications_port:external_port
             ; parent_log= log
             ; banlist } }
       in

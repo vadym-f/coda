@@ -37,8 +37,7 @@ module type S = sig
 
   module Config : Config_intf
 
-  val create :
-    Config.t -> Host_and_port.t Rpc.Implementation.t list -> t Deferred.t
+  val create : Config.t -> Peer.t Rpc.Implementation.t list -> t Deferred.t
 
   val received : t -> msg Envelope.Incoming.t Linear_pipe.Reader.t
 
@@ -118,7 +117,7 @@ module Make (Message : Message_intf) : S with type msg := Message.msg = struct
     broadcast_selected t selected_peers msg
 
   let create (config : Config.t)
-      (implementations : Host_and_port.t Rpc.Implementation.t list) =
+      (implementations : Peer.t Rpc.Implementation.t list) =
     let log = Logger.child config.parent_log __MODULE__ in
     trace_task "gossip net" (fun () ->
         let%map membership =
@@ -184,11 +183,15 @@ module Make (Message : Message_intf) : S with type msg := Message.msg = struct
              ~on_handler_error:
                (`Call
                  (fun _ exn -> Logger.error log "%s" (Exn.to_string_mach exn)))
-             (Tcp.Where_to_listen.of_port (snd config.me))
-             (fun peer reader writer ->
+             (Tcp.Where_to_listen.of_port config.me.communications_port)
+             (fun inet reader writer ->
                Rpc.Connection.server_with_close reader writer ~implementations
                  ~connection_state:(fun _ ->
-                   Socket.Address.Inet.to_host_and_port peer )
+                   let host = Socket.Address.Inet.addr inet in
+                   let communications_port = Socket.Address.Inet.port inet in
+                   (* kademlia port is a dummy here *)
+                   Peer.create host ~discovery_port:(communications_port + 1)
+                     ~communications_port )
                  ~on_handshake_error:
                    (`Call
                      (fun exn ->

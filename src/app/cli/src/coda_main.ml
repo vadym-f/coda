@@ -171,8 +171,7 @@ module type Main_intf = sig
       type t
 
       module Peer : sig
-        type t = Host_and_port.Stable.V1.t * int
-        [@@deriving bin_io, sexp, compare, hash]
+        type t = Network_peer.Peer.t [@@deriving bin_io, sexp, compare, hash]
 
         val external_rpc : t -> Host_and_port.Stable.V1.t
       end
@@ -335,7 +334,7 @@ module type Main_intf = sig
   val best_tip :
     t -> Inputs.Transition_frontier.Breadcrumb.t Participating_state.t
 
-  val peers : t -> Kademlia.Peer.t list
+  val peers : t -> Network_peer.Peer.t list
 
   val strongest_ledgers :
        t
@@ -758,6 +757,7 @@ struct
 
     open Snark_work_lib.Work
     open Network_pool.Snark_pool_diff
+    open Network_peer
 
     let add_completed_work t
         (res :
@@ -769,7 +769,9 @@ struct
                 ( List.map res.spec.instances ~f:Single.Spec.statement
                 , { Diff.proof= res.proofs
                   ; fee= {fee= res.spec.fee; prover= res.prover} } ))
-           ~sender:(Host_and_port.of_string "127.0.0.1:0"))
+           ~sender:
+             (Peer.create Unix.Inet_addr.localhost ~discovery_port:0
+                ~communications_port:0))
   end
 
   module Sync_ledger =
@@ -1292,7 +1294,7 @@ module Run (Config_in : Config_intf) (Program : Main_intf) = struct
     ; state_hash
     ; commit_id= Config_in.commit_id
     ; conf_dir= Config_in.conf_dir
-    ; peers= List.map (peers t) ~f:(fun (p, _) -> Host_and_port.to_string p)
+    ; peers= List.map (peers t) ~f:Network_peer.Peer.to_string
     ; user_commands_sent= !txn_count
     ; run_snark_worker= run_snark_worker t
     ; proposal_interval= Int64.to_int_exn Consensus.Mechanism.block_interval_ms

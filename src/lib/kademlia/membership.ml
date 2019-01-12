@@ -12,7 +12,7 @@ module type S = sig
   type banlist
 
   val connect :
-       initial_peers:Peer.t list
+       initial_peers:Discovery_peer.t list
     -> me:Peer.t
     -> parent_log:Logger.t
     -> conf_dir:string
@@ -34,7 +34,7 @@ module type Process_intf = sig
   val kill : t -> unit Deferred.t
 
   val create :
-       initial_peers:Peer.t list
+       initial_peers:Discovery_peer.t list
     -> me:Peer.t
     -> log:Logger.t
     -> conf_dir:string
@@ -83,47 +83,47 @@ module Haskell_process = struct
     in
     Sys.remove lock_path
 
-  let cli_format_initial_peer (peer : Peer.t) : string =
-    Printf.sprintf "(\"%s\", %d)"
-      (Unix.Inet_addr.to_string peer.host)
-      peer.kademlia_port
+  let cli_format_host_and_port host port =
+    Printf.sprintf "(\"%s\", %d)" host port
 
-  let cli_format (peer : Peer.t) : string =
-    (* assertion for discovery_port = external_port - 1 *)
-    assert (Int.equal (peer.kademlia_port - 1) peer.rpc_port) ;
-    cli_format_initial_peer peer
+  let cli_format_discovery_peer (peer : Discovery_peer.t) : string =
+    cli_format_host_and_port (Unix.Inet_addr.to_string peer.host) peer.port
+
+  let cli_format_peer_checked (peer : Peer.t) : string =
+    (* assertion for discovery_port = communication_port - 1 *)
+    assert (Int.equal peer.discovery_port (peer.communication_port - 1)) ;
+    cli_format_host_and_port
+      (Unix.Inet_addr.to_string peer.host)
+      peer.discovery_port
 
   let filter_initial_peers initial_peers me =
-    let open Peer in
-    let me_host = me.host in
-    let me_kademlia_port = me.kademlia_port in
+    let open Network_peer in
+    let me_host = me.Peer.host in
+    let me_discovery_port = me.discovery_port in
     List.filter initial_peers ~f:(fun peer ->
-        let peer_host = peer.host in
-        let peer_kademlia_port = peer.kademlia_port in
+        let peer_host = peer.Discovery_peer.host in
+        let peer_discovery_port = peer.port in
         not
           ( Unix.Inet_addr.equal peer_host me_host
-          && Int.equal me_kademlia_port peer_kademlia_port ) )
+          && Int.equal me_discovery_port peer_discovery_port ) )
 
   let%test "filter_initial_peers_test" =
+    let me_host = Unix.Inet_addr.of_string "1.1.1.1" in
     let me =
-      Peer.create
-        (Unix.Inet_addr.of_string "1.1.1.1")
-        ~kademlia_port:8000 ~rpc_port:8001
+      Peer.create me_host ~discovery_port:8000 ~communication_port:8001
     in
     let other =
-      Peer.create
-        (Unix.Inet_addr.of_string "1.1.1.2")
-        ~kademlia_port:8000 ~rpc_port:8001
+      Discovery_peer.create (Unix.Inet_addr.of_string "1.1.1.2") 8000
     in
-    filter_initial_peers [me; other] me = [other]
+    filter_initial_peers [Discovery_peer.of_peer me; other] me = [other]
 
   let create ~initial_peers ~me ~log ~conf_dir =
     let lock_path = Filename.concat conf_dir lock_file in
     let filtered_initial_peers = filter_initial_peers initial_peers me in
     let run_kademlia () =
       let args =
-        ["test"; cli_format me]
-        @ List.map filtered_initial_peers ~f:cli_format_initial_peer
+        ["test"; cli_format_peer_checked me]
+        @ List.map filtered_initial_peers ~f:cli_format_discovery_peer
       in
       Logger.debug log "Args: %s\n"
         (List.sexp_of_t String.sexp_of_t args |> Sexp.to_string_hum) ;
@@ -179,8 +179,8 @@ module Haskell_process = struct
     in
     let open Deferred.Or_error.Let_syntax in
     let args =
-      ["test"; cli_format me]
-      @ List.map initial_peers ~f:cli_format_initial_peer
+      ["test"; cli_format_peer_checked me]
+      @ List.map initial_peers ~f:cli_format_discovery_peer
     in
     Logger.debug log "Args: %s\n"
       (List.sexp_of_t String.sexp_of_t args |> Sexp.to_string_hum) ;
@@ -242,7 +242,7 @@ module Make
 
         val lookup :
              t
-          -> Peer.t
+          -> Discovery_peer.t
           -> [ `Normal
              | `Punished of punishment
              | `Suspicious of Banlist.Score.t ]
@@ -250,7 +250,8 @@ module Make
   include S with type banlist := Banlist.t
 
   module For_tests : sig
-    val node : Peer.t -> Peer.t list -> string -> Banlist.t -> t Deferred.t
+    val node :
+      Peer.t -> Discovery_peer.t list -> string -> Banlist.t -> t Deferred.t
   end
 end = struct
   open Async
@@ -263,7 +264,7 @@ end = struct
     ; first_peers: Peer.t list Deferred.t
     ; banlist: Banlist.t }
 
-  let is_banned banlist peer =
+  let is_banned banlist (peer : Discovery_peer.t) =
     match Banlist.lookup banlist peer with `Punished _ -> true | _ -> false
 
   let live t lives =
@@ -287,11 +288,12 @@ end = struct
   let peer_of_addr_string s =
     let addr = Host_and_port.of_string s in
     let host = Unix.Inet_addr.of_string (Host_and_port.host addr) in
-    let kademlia_port = Host_and_port.port addr in
-    let rpc_port = kademlia_port - 1 in
-    Peer.create host ~kademlia_port ~rpc_port
+    let discovery_port = Host_and_port.port addr in
+    let communication_port = discovery_port - 1 in
+    Peer.create host ~discovery_port ~communication_port
 
-  let connect ~initial_peers ~me ~parent_log ~conf_dir ~banlist =
+  let connect ~(initial_peers : Discovery_peer.t list) ~me ~parent_log
+      ~conf_dir ~banlist =
     let open Deferred.Or_error.Let_syntax in
     let log = Logger.child parent_log "membership" in
     let filtered_peers =
@@ -337,7 +339,7 @@ end = struct
           if f x then (x :: true_subresult, false_subresult)
           else (true_subresult, x :: false_subresult)
     in
-    let peers = Peer.Table.keys t.peers in
+    let peers = Discovery_peer.Table.keys t.peers in
     let banned_peers, normal_peers = split peers ~f:(is_banned t.banlist) in
     don't_wait_for (dead t banned_peers) ;
     normal_peers
@@ -402,8 +404,8 @@ let%test_module "Tests" =
           match%bind
             M.connect ~initial_peers:[]
               ~me:
-                (Peer.create Unix.Inet_addr.localhost ~kademlia_port:3001
-                   ~rpc_port:3000)
+                (Peer.create Unix.Inet_addr.localhost ~discovery_port:3001
+                   ~communications_port:3000)
               ~parent_log:(Logger.create ())
               ~conf_dir:(Filename.temp_dir_name ^/ "membership-test")
           with
@@ -485,10 +487,10 @@ let%test_module "Tests" =
               ~f:(fun acc e ->
                 match (acc, e) with
                 | `On p :: rest, Peer.Event.Connect [peer]
-                  when peer.kademlia_port = p ->
+                  when peer.discovery_port = p ->
                     rest
                 | `Off p :: rest, Peer.Event.Disconnect [peer]
-                  when peer.kademlia_port = p ->
+                  when peer.discovery_port = p ->
                     rest
                 | _ ->
                     failwith
@@ -505,9 +507,9 @@ let%test_module "Tests" =
       fold_membership (module M) ~init:false ~f:(fun b _e -> b || true)
 
     let int_to_local_peer i =
-      let kademlia_port = 3006 + i in
-      let rpc_port = kademlia_port - 1 in
-      Peer.create Unix.Inet_addr.localhost ~kademlia_port ~rpc_port
+      let discovery_port = 3006 + i in
+      let communication_port = discovery_port - 1 in
+      Peer.create Unix.Inet_addr.localhost ~discovery_port ~communication_port
 
     let conf_dir = Filename.temp_dir_name ^/ ".kademlia-test-"
 

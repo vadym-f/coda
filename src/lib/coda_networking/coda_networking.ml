@@ -2,6 +2,7 @@ open Core_kernel
 open Async
 open Kademlia
 open Coda_base
+open Network_peer
 open Pipe_lib
 
 module type Sync_ledger_intf = sig
@@ -546,8 +547,7 @@ module Make (Inputs : Inputs_intf) = struct
                     Staged_ledger_hash %{sexp: Staged_ledger_hash.t}"
                   peer staged_ledger_hash ;
                 Ok
-                  (Envelope.Incoming.wrap ~data:staged_ledger_aux
-                     ~sender:(fst peer)) )
+                  (Envelope.Incoming.wrap ~data:staged_ledger_aux ~sender:peer) )
               else (
                 Logger.faulty_peer t.log
                   !"%{sexp: Peer.t} sent contents resulting in a bad \
@@ -597,7 +597,7 @@ module Make (Inputs : Inputs_intf) = struct
                     !"Received answer from peer %{sexp: Peer.t} on \
                       ledger_hash %{sexp: Ledger_hash.t}"
                     peer (fst answer) ;
-                  Some (Envelope.Incoming.wrap ~data:answer ~sender:(fst peer))
+                  Some (Envelope.Incoming.wrap ~data:answer ~sender:peer)
               | Ok (Error e) ->
                   Logger.info t.log "Rpc error: %s" (Error.to_string_mach e) ;
                   Hash_set.add peers_tried peer ;

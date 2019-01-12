@@ -30,7 +30,9 @@ let main () =
   let peers = [List.hd_exn expected_peers] in
   let external_port = List.nth_exn external_ports n in
   let discovery_port = List.nth_exn discovery_ports n in
-  Logger.debug log !"connecting to peers %{sexp: Host_and_port.t list}\n" peers ;
+  Logger.debug log
+    !"connecting to peers %{sexp: Network_peer.Peer.t list}\n"
+    peers ;
   let config =
     Coda_process.local_config ~peers ~external_port ~discovery_port
       ~snark_worker_config:None ~should_propose:false ~program_dir
@@ -40,12 +42,11 @@ let main () =
   let%bind _ = after (Time.Span.of_sec 10.) in
   let%map peers = Coda_process.peers_exn worker in
   Logger.debug log
-    !"got peers %{sexp: Kademlia.Peer.t list} %{sexp: Host_and_port.t list}\n"
+    !"got peers %{sexp: Network_peer.Peer.t list} %{sexp: Network_peer.Peer.t \
+      list}\n"
     peers expected_peers ;
-  let module S = Host_and_port.Set in
-  assert (
-    S.equal (S.of_list (peers |> List.map ~f:fst)) (S.of_list expected_peers)
-  )
+  let module S = Network_peer.Peer.Set in
+  assert (S.equal (S.of_list peers) (S.of_list expected_peers))
 
 let command =
   Command.async

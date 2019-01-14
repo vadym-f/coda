@@ -8,18 +8,18 @@ module Haskell : sig
   type t
 
   val connect :
-       initial_peers:Peer.t list
+       initial_peers:Discovery_peer.t list
     -> me:Peer.t
     -> parent_log:Logger.t
     -> conf_dir:string
     -> banlist:Coda_base.Banlist.t
     -> t Deferred.Or_error.t
 
-  val peers : t -> Peer.t list
+  val peers : t -> Discovery_peer.t list
 
-  val first_peers : t -> Peer.t list Deferred.t
+  val first_peers : t -> Discovery_peer.t list Deferred.t
 
-  val changes : t -> Peer.Event.t Linear_pipe.Reader.t
+  val changes : t -> Discovery_peer.Event.t Linear_pipe.Reader.t
 
   val stop : t -> unit Deferred.t
 end

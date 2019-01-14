@@ -100,14 +100,14 @@ module Make (Message : Message_intf) : S with type msg := Message.msg = struct
     | Error exn -> Or_error.of_exn exn
 
   let broadcast_selected t peers msg =
-    let peers = List.map peers ~f:(fun peer -> Peer.external_rpc peer) in
-    let send peer =
-      try_call_rpc peer t.timeout
+    let comms_peers = List.map peers ~f:Communications_peer.of_peer in
+    let send comms_peer =
+      try_call_rpc comms_peer t.timeout
         (fun conn m -> return (Message.dispatch_multi conn m))
         msg
     in
     trace_event "broadcasting message" ;
-    Deferred.List.iter ~how:`Parallel peers ~f:(fun p ->
+    Deferred.List.iter ~how:`Parallel comms_peers ~f:(fun p ->
         match%map send p with
         | Ok () -> ()
         | Error e -> Logger.error t.log "%s" (Error.to_string_hum e) )
@@ -169,12 +169,14 @@ module Make (Message : Message_intf) : S with type msg := Message.msg = struct
               ~f:(function
               | Connect peers ->
                   Logger.info log "Some peers connected %s"
-                    (List.sexp_of_t Peer.sexp_of_t peers |> Sexp.to_string_hum) ;
+                    ( List.sexp_of_t Discovery_peer.sexp_of_t peers
+                    |> Sexp.to_string_hum ) ;
                   List.iter peers ~f:(fun peer -> Hash_set.add t.peers peer) ;
                   Deferred.unit
               | Disconnect peers ->
                   Logger.info log "Some peers disconnected %s"
-                    (List.sexp_of_t Peer.sexp_of_t peers |> Sexp.to_string_hum) ;
+                    ( List.sexp_of_t Discovery_peer.sexp_of_t peers
+                    |> Sexp.to_string_hum ) ;
                   List.iter peers ~f:(fun peer -> Hash_set.remove t.peers peer) ;
                   Deferred.unit )
             |> ignore ) ;
@@ -183,15 +185,15 @@ module Make (Message : Message_intf) : S with type msg := Message.msg = struct
              ~on_handler_error:
                (`Call
                  (fun _ exn -> Logger.error log "%s" (Exn.to_string_mach exn)))
-             (Tcp.Where_to_listen.of_port config.me.communications_port)
+             (Tcp.Where_to_listen.of_port config.me.communication_port)
              (fun inet reader writer ->
                Rpc.Connection.server_with_close reader writer ~implementations
                  ~connection_state:(fun _ ->
                    let host = Socket.Address.Inet.addr inet in
-                   let communications_port = Socket.Address.Inet.port inet in
+                   let communication_port = Socket.Address.Inet.port inet in
                    (* kademlia port is a dummy here *)
-                   Peer.create host ~discovery_port:(communications_port + 1)
-                     ~communications_port )
+                   Peer.create host ~discovery_port:(communication_port + 1)
+                     ~communication_port )
                  ~on_handshake_error:
                    (`Call
                      (fun exn ->
@@ -215,14 +217,14 @@ module Make (Message : Message_intf) : S with type msg := Message.msg = struct
 
   let random_peers t n = random_sublist (Hash_set.to_list t.peers) n
 
-  let random_peers_except t n ~(except : Peer.Hash_set.t) =
+  let random_peers_except t n ~(except : Discovery_peer.Hash_set.t) =
     let new_peers = Hash_set.(diff t.peers except |> to_list) in
     random_sublist new_peers n
 
   let query_peer t (peer : Peer.t) rpc query =
     Logger.trace t.log !"Querying peer %{sexp: Peer.t}" peer ;
-    let peer = Peer.external_rpc peer in
-    try_call_rpc peer t.timeout rpc query
+    let comms_peer = Commuications_peer.of_peer peer in
+    try_call_rpc comms_peer t.timeout rpc query
 
   let query_random_peers t n rpc query =
     let peers = random_sublist (Hash_set.to_list t.peers) n in

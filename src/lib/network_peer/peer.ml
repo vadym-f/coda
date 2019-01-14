@@ -13,11 +13,6 @@ include T
 include Hashable.Make (T)
 include Comparable.Make_binable (T)
 
-let external_rpc t =
-  let host = Unix.Inet_addr.to_string t.host in
-  let port = t.communication_port in
-  Host_and_port.create ~host ~port
-
 let create host ~discovery_port ~communication_port =
   {host; discovery_port; communication_port}
 

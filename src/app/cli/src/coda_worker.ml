@@ -38,7 +38,7 @@ module Input = struct
     ; program_dir: string
     ; external_port: int
     ; discovery_port: int
-    ; peers: Network_peer.Peer.t list }
+    ; peers: Network_peer.Discovery_peer.t list }
   [@@deriving bin_io]
 end
 

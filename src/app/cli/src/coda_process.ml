@@ -18,8 +18,10 @@ let spawn_exn (config : Coda_worker.Input.t) =
   File_system.dup_stderr process ;
   return (conn, process, config)
 
-let local_config ?proposal_interval ~peers ~discovery_port ~external_port
-    ~program_dir ~should_propose ~snark_worker_config ~work_selection () =
+let local_config ?proposal_interval
+    ~(peers : Network_peer.Discovery_peer.t list) ~discovery_port
+    ~external_port ~program_dir ~should_propose ~snark_worker_config
+    ~work_selection () =
   let host = "127.0.0.1" in
   let conf_dir =
     Filename.temp_dir_name

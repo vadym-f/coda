@@ -2,21 +2,20 @@ open Core
 open Async
 open Coda_worker
 open Coda_main
+open Network_peer
 
 let init () = Parallel.init_master ()
 
 let net_configs n =
   let discovery_ports = List.init n ~f:(fun i -> 23000 + 1 + (i * 2)) in
-  let external_ports = List.map discovery_ports ~f:(fun n -> n - 1) in
-  let all_peers =
-    List.map2_exn discovery_ports external_ports
-      ~f:(fun discovery_port communication_port ->
-        Network_peer.Peer.create Unix.Inet_addr.localhost ~discovery_port
-          ~communication_port )
+  let external_ports = List.init n ~f:(fun i -> 23000 + (i * 2)) in
+  let discovery_peers =
+    List.map discovery_ports ~f:(fun port ->
+        Discovery_peer.create Unix.Inet_addr.localhost port )
   in
   let peers =
-    List.init n ~f:(fun i -> List.take all_peers i @ List.drop all_peers (i + 1)
-    )
+    List.init n ~f:(fun i ->
+        List.take discovery_peers i @ List.drop discovery_peers (i + 1) )
   in
   (discovery_ports, external_ports, peers)
 

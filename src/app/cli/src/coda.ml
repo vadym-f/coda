@@ -194,7 +194,7 @@ let daemon log =
                      (YJ.Util.convert_each YJ.Util.to_string))
                   "peers" None ~default:[] ]
        in
-       let communications_port = external_port - 1 in
+       let discovery_port = external_port + 1 in
        let%bind () = Unix.mkdir ~p:() conf_dir in
        let%bind initial_peers_hosts_and_ports =
          match all_peers_hosts_and_ports with
@@ -248,7 +248,7 @@ let daemon log =
        let me =
          Peer.create
            (Unix.Inet_addr.of_string ip)
-           ~discovery_port:external_port ~communication_port
+           ~discovery_port ~communication_port:external_port
        in
        let sequence maybe_def =
          match maybe_def with

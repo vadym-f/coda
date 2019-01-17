@@ -9,7 +9,7 @@ module Punishment_record :
 
 include
   Banlist.S
-  with type peer := Discovery_peer.t
+  with type peer := Communications_peer.t
    and type record := Punishment_record.t
    and type offense := Banlist.Offense.t
 

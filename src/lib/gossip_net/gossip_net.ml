@@ -22,7 +22,7 @@ module type Config_intf = sig
   type t =
     { timeout: Time.Span.t
     ; target_peer_count: int
-    ; initial_peers: Peer.t list
+    ; initial_peers: Communications_peer.t list
     ; me: Peer.t
     ; conf_dir: string
     ; parent_log: Logger.t
@@ -72,7 +72,7 @@ module Make (Message : Message_intf) : S with type msg := Message.msg = struct
     type t =
       { timeout: Time.Span.t
       ; target_peer_count: int
-      ; initial_peers: Peer.t list
+      ; initial_peers: Communications_peer.t list
       ; me: Peer.t
       ; conf_dir: string
       ; parent_log: Logger.t
@@ -90,8 +90,10 @@ module Make (Message : Message_intf) : S with type msg := Message.msg = struct
 
   let try_call_rpc peer timeout dispatch query =
     try_with (fun () ->
-        Tcp.with_connection (Tcp.Where_to_connect.of_host_and_port peer)
-          ~timeout (fun _ r w ->
+        let host_and_port = Communications_peer.to_host_and_port peer in
+        Tcp.with_connection
+          (Tcp.Where_to_connect.of_host_and_port host_and_port) ~timeout
+          (fun _ r w ->
             create_connection_with_menu peer r w
             >>=? fun conn -> dispatch conn query ) )
     >>| function
@@ -169,14 +171,12 @@ module Make (Message : Message_intf) : S with type msg := Message.msg = struct
               ~f:(function
               | Connect peers ->
                   Logger.info log "Some peers connected %s"
-                    ( List.sexp_of_t Discovery_peer.sexp_of_t peers
-                    |> Sexp.to_string_hum ) ;
+                    (List.sexp_of_t Peer.sexp_of_t peers |> Sexp.to_string_hum) ;
                   List.iter peers ~f:(fun peer -> Hash_set.add t.peers peer) ;
                   Deferred.unit
               | Disconnect peers ->
                   Logger.info log "Some peers disconnected %s"
-                    ( List.sexp_of_t Discovery_peer.sexp_of_t peers
-                    |> Sexp.to_string_hum ) ;
+                    (List.sexp_of_t Peer.sexp_of_t peers |> Sexp.to_string_hum) ;
                   List.iter peers ~f:(fun peer -> Hash_set.remove t.peers peer) ;
                   Deferred.unit )
             |> ignore ) ;
@@ -217,13 +217,13 @@ module Make (Message : Message_intf) : S with type msg := Message.msg = struct
 
   let random_peers t n = random_sublist (Hash_set.to_list t.peers) n
 
-  let random_peers_except t n ~(except : Discovery_peer.Hash_set.t) =
+  let random_peers_except t n ~(except : Peer.Hash_set.t) =
     let new_peers = Hash_set.(diff t.peers except |> to_list) in
     random_sublist new_peers n
 
   let query_peer t (peer : Peer.t) rpc query =
     Logger.trace t.log !"Querying peer %{sexp: Peer.t}" peer ;
-    let comms_peer = Commuications_peer.of_peer peer in
+    let comms_peer = Communications_peer.of_peer peer in
     try_call_rpc comms_peer t.timeout rpc query
 
   let query_random_peers t n rpc query =

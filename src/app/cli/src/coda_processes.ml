@@ -10,9 +10,9 @@ let net_configs n =
   let external_ports = List.map discovery_ports ~f:(fun n -> n - 1) in
   let all_peers =
     List.map2_exn discovery_ports external_ports
-      ~f:(fun discovery_port communications_port ->
+      ~f:(fun discovery_port communication_port ->
         Network_peer.Peer.create Unix.Inet_addr.localhost ~discovery_port
-          ~communications_port )
+          ~communication_port )
   in
   let peers =
     List.init n ~f:(fun i -> List.take all_peers i @ List.drop all_peers (i + 1)

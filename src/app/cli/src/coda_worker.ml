@@ -236,7 +236,7 @@ module T = struct
             ; me=
                 Network_peer.Peer.create
                   (Unix.Inet_addr.of_string host)
-                  ~discovery_port ~communications_port:external_port
+                  ~discovery_port ~communication_port:external_port
             ; parent_log= log
             ; banlist } }
       in

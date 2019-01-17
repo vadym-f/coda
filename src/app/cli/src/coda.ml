@@ -46,7 +46,7 @@ let daemon log =
            "FILE Private key file for the proposing transitions \
             (default:don't propose)"
          (optional file)
-     and peers =
+     and peers_hosts_and_ports =
        flag "peer"
          ~doc:
            "HOST:PORT TCP daemon communications (can be given multiple times)"
@@ -185,52 +185,47 @@ let daemon log =
            "work-selection" ~default:Protocols.Coda_pow.Work_selection.Seq
            work_selection_flag
        in
-       let peers : Communications_peer.t list =
+       let all_peers_hosts_and_ports : Host_and_port.t list =
          List.concat
-           [ peers
-           ; List.map ~f:(fun s ->
-                 Host_and_port.of_string s
-                 |> Communications_peer.of_host_and_port )
+           [ peers_hosts_and_ports
+           ; List.map ~f:Host_and_port.of_string
              @@ or_from_config
                   (Fn.compose Option.some
                      (YJ.Util.convert_each YJ.Util.to_string))
                   "peers" None ~default:[] ]
        in
-       let discovery_port = external_port + 1 in
+       let communications_port = external_port - 1 in
        let%bind () = Unix.mkdir ~p:() conf_dir in
-       let%bind initial_peers_raw =
-         match peers with
-         | _ :: _ -> return peers
+       let%bind initial_peers_hosts_and_ports =
+         match all_peers_hosts_and_ports with
+         | _ :: _ -> return peers_hosts_and_ports
          | [] -> (
              let peers_path = conf_dir ^/ "peers" in
              match%bind
-               Reader.load_sexp peers_path
-                 [%of_sexp: Communications_peer.t list]
+               Reader.load_sexp peers_path [%of_sexp: Host_and_port.t list]
              with
              | Ok ls -> return ls
              | Error e ->
                  let default_initial_peers = [] in
                  let%map () =
                    Writer.save_sexp peers_path
-                     ([%sexp_of: Communications_peer.t list]
-                        default_initial_peers)
+                     ([%sexp_of: Host_and_port.t list] default_initial_peers)
                  in
                  [] )
        in
        let%bind initial_peers =
          Deferred.List.filter_map ~how:(`Max_concurrent_jobs 8)
-           initial_peers_raw ~f:(fun addr ->
-             let host = Host_and_port.host addr in
+           initial_peers_hosts_and_ports ~f:(fun host_and_port ->
+             let host = Host_and_port.host host_and_port in
              match%bind
                Monitor.try_with_or_error (fun () ->
                    Unix.Inet_addr.of_string_or_getbyname host )
              with
-             | Ok inet_addr ->
+             | Ok host ->
                  return
                  @@ Some
-                      (Host_and_port.create
-                         ~host:(Unix.Inet_addr.to_string inet_addr)
-                         ~port:(Host_and_port.port addr))
+                      (Communications_peer.create host
+                         (Host_and_port.port host_and_port))
              | Error e ->
                  Logger.trace log "getaddr exception: %s"
                    (Error.to_string_mach e) ;
@@ -239,7 +234,10 @@ let daemon log =
                  return None )
        in
        let%bind () =
-         if List.length peers <> 0 && List.length initial_peers = 0 then (
+         if
+           List.length peers_hosts_and_ports <> 0
+           && List.length initial_peers = 0
+         then (
            eprintf "Error: failed to connect to any peers\n" ;
            exit 1 )
          else Deferred.unit
@@ -248,7 +246,9 @@ let daemon log =
          match ip with None -> Find_ip.find () | Some ip -> return ip
        in
        let me =
-         (Host_and_port.create ~host:ip ~port:discovery_port, external_port)
+         Peer.create
+           (Unix.Inet_addr.of_string ip)
+           ~discovery_port:external_port ~communication_port
        in
        let sequence maybe_def =
          match maybe_def with

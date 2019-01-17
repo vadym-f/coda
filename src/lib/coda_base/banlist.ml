@@ -13,8 +13,8 @@ module Punishment_record = struct
 end
 
 module Punished_db =
-  Punished_db.Make (Discovery_peer) (Time) (Punishment_record)
-    (Key_value_database.Make_mock (Discovery_peer) (Punishment_record))
+  Punished_db.Make (Communications_peer) (Time) (Punishment_record)
+    (Key_value_database.Make_mock (Communications_peer) (Punishment_record))
 
 let ban_threshold = 100
 
@@ -29,10 +29,11 @@ module Score_mechanism = struct
       | Send_bad_aux -> ban_threshold / 4 )
 end
 
-module Suspicious_db = Key_value_database.Make_mock (Discovery_peer) (Score)
+module Suspicious_db =
+  Key_value_database.Make_mock (Communications_peer) (Score)
 
 module Banlist = struct
-  include Make (Discovery_peer) (Punishment_record) (Suspicious_db)
+  include Make (Communications_peer) (Punishment_record) (Suspicious_db)
             (Punished_db)
             (Score_mechanism)
 

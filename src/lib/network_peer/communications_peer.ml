@@ -14,10 +14,15 @@ include Comparable.Make_binable (T)
 
 let create host port = {host; port}
 
-let of_host_and_port host_port =
-  let host = Host_and_port.host host_port |> Unix.Inet_addr.of_string in
-  let port = Host_and_port.port host_port in
+let of_host_and_port host_and_port =
+  let host =
+    Host_and_port.host host_and_port |> Unix.Inet_addr.of_string_or_getbyname
+  in
+  let port = Host_and_port.port host_and_port in
   {host; port}
+
+let to_host_and_port t =
+  Host_and_port.create ~host:(Unix.Inet_addr.to_string t.host) ~port:t.port
 
 let of_peer peer = create peer.Peer.host peer.communication_port
 

@@ -77,7 +77,7 @@ let run_test () : unit Deferred.t =
         ; conf_dir= temp_conf_dir
         ; me=
             Network_peer.Peer.create Unix.Inet_addr.localhost
-              ~discovery_port:8001 ~communications_port:8000
+              ~discovery_port:8001 ~communication_port:8000
         ; banlist } }
   in
   let%bind coda =

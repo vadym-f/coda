@@ -172,8 +172,6 @@ module type Main_intf = sig
 
       module Peer : sig
         type t = Network_peer.Peer.t [@@deriving bin_io, sexp, compare, hash]
-
-        val external_rpc : t -> Host_and_port.Stable.V1.t
       end
 
       module Gossip_net : sig
@@ -771,7 +769,7 @@ struct
                   ; fee= {fee= res.spec.fee; prover= res.prover} } ))
            ~sender:
              (Peer.create Unix.Inet_addr.localhost ~discovery_port:0
-                ~communications_port:0))
+                ~communication_port:0))
   end
 
   module Sync_ledger =

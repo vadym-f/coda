@@ -463,6 +463,10 @@ module Make (Inputs : Inputs_intf) : Intf.S = struct
           (Snark_params.Tick.Pedersen.Digest.Bits.to_bits digest)
 
       module Checked = struct
+        let dummy () : (var, _) Snark_params.Tick.Checked.t =
+          let open Snark_params.Tick.Let_syntax in
+          Sha256.Checked.digest [Snark_params.Tick.Boolean.true_]
+
         let hash msg g =
           let open Snark_params.Tick.Let_syntax in
           let%bind msg_triples = Message.Checked.var_to_triples msg in
@@ -1013,6 +1017,8 @@ module Make (Inputs : Inputs_intf) : Intf.S = struct
       ; last_epoch_data
       ; curr_epoch_data }
 
+    type var_ = var
+
     let%snarkydef update_var (previous_state : var)
         (transition_data : Consensus_transition_data.var)
         (previous_protocol_state_hash : Coda_base.State_hash.var)
@@ -1026,8 +1032,8 @@ module Make (Inputs : Inputs_intf) : Intf.S = struct
       let {epoch= next_epoch; slot= _} = transition_data in
       let%bind epoch_increased =
         let%bind c = Epoch.compare_var prev_epoch next_epoch in
-        let%map () = Boolean.Assert.is_true c.less_or_equal in
-        c.less
+        (*let%map () = Boolean.Assert.is_true c.less_or_equal in*)
+        return c.less
       in
       let%bind last_data =
         Epoch_data.if_ epoch_increased ~then_:previous_state.curr_epoch_data
@@ -1035,12 +1041,17 @@ module Make (Inputs : Inputs_intf) : Intf.S = struct
       in
       let%bind threshold_satisfied, vrf_result =
         let%bind (module M) = Inner_curve.Checked.Shifted.create () in
+        (*let vrf_result : (Vrf.Output.var, _) Checked.t =*)
+        (*Vrf.Output.Checked.dummy ()*)
+        (*in*)
+        (*let%bind vrf_result = vrf_result in*)
+        (*return (Boolean.true_, vrf_result)*)
         Vrf.Checked.check
           (module M)
           ~epoch_ledger:last_data.ledger ~epoch:transition_data.epoch
           ~slot:transition_data.slot ~seed:last_data.seed
       in
-      let%bind curr_data =
+      (*let%bind _curr_data =
         let%map seed =
           let%bind in_seed_update_range =
             Epoch.Slot.in_seed_update_range_var prev_slot
@@ -1087,7 +1098,8 @@ module Make (Inputs : Inputs_intf) : Intf.S = struct
             ~then_:previous_protocol_state_hash ~else_:base
         in
         {Epoch_data.seed; length; ledger; start_checkpoint; lock_checkpoint}
-      and length = Length.increment_var previous_state.length
+      in*)
+      let%bind length = Length.increment_var previous_state.length
       (* TODO: keep track of total_currency in transaction snark. The current_slot
        * implementation would allow an adversary to make then total_currency incorrect by
        * not adding the coinbase to their account. *)
@@ -1096,16 +1108,17 @@ module Make (Inputs : Inputs_intf) : Intf.S = struct
       and epoch_length =
         Length.increment_if_var previous_state.epoch_length epoch_increased
       in
-      return
-        ( `Success threshold_satisfied
-        , { length
-          ; epoch_length
-          ; last_vrf_output= vrf_result
-          ; curr_epoch= transition_data.epoch
-          ; curr_slot= transition_data.slot
-          ; total_currency= new_total_currency
-          ; last_epoch_data= last_data
-          ; curr_epoch_data= curr_data } )
+      let r : var_ =
+        { length
+        ; epoch_length
+        ; last_vrf_output= vrf_result
+        ; curr_epoch= transition_data.epoch
+        ; curr_slot= transition_data.slot
+        ; total_currency= new_total_currency
+        ; last_epoch_data= last_data
+        ; curr_epoch_data= last_data }
+      in
+      return (`Success threshold_satisfied, r)
 
     let length (t : value) = t.length
 

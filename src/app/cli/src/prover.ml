@@ -68,10 +68,15 @@ module Worker_state = struct
 
          let wrap hash proof =
            let module Wrap = Keys.Wrap in
-           Tock.prove
-             (Tock.Keypair.pk Wrap.keys)
-             Wrap.input {Wrap.Prover_state.proof} Wrap.main
-             (Wrap_input.of_tick_field hash)
+           Core.printf !"Wrap starting \n%!" ;
+           let p =
+             Tock.prove
+               (Tock.Keypair.pk Wrap.keys)
+               Wrap.input {Wrap.Prover_state.proof} Wrap.main
+               (Wrap_input.of_tick_field hash)
+           in
+           Core.printf !"Wrap succeeded \n%!" ;
+           p
 
          let extend_blockchain (chain : Blockchain.t)
              (next_state : Consensus.Mechanism.Protocol_state.value)
@@ -88,11 +93,13 @@ module Worker_state = struct
              Tick.handle (Keys.Step.main x)
                (Consensus_mechanism.Prover_state.handler state_for_handler)
            in
+           Core.printf !"Really before prev_proof! \n%!" ;
            let prev_proof =
              Tick.prove
                (Tick.Keypair.pk Keys.Step.keys)
                (Keys.Step.input ()) prover_state main next_state_top_hash
            in
+           Core.printf !"Prev_proof done! \n%!" ;
            { Blockchain.state= next_state
            ; proof= wrap next_state_top_hash prev_proof }
 

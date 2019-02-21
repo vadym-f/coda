@@ -471,6 +471,20 @@ let stop_tracing =
          | Ok () -> printf "Daemon stopped printing!"
          | Error e -> eprintf !"Error: %{sexp:Error.t}\n" e ))
 
+let visualize_frontier =
+  let open Deferred.Let_syntax in
+  let open Daemon_rpcs in
+  let open Command.Param in
+  Command.async ~summary:"Produce a dot file of the transition_frontier"
+    (Cli_lib.Background_daemon.init
+       Command.Param.(anon @@ ("file" %: string))
+       ~f:(fun port filename ->
+         match%map dispatch Visualize_frontier.rpc filename port with
+         | Ok () ->
+             printf !"Successfully wrote the file in location %s." filename
+         | Error e ->
+             printf "Could not save file: %s\n" (Error.to_string_hum e) ))
+
 let command =
   Command.group ~summary:"Lightweight client process"
     [ ("get-balance", get_balance)

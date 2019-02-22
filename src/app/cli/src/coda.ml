@@ -281,7 +281,6 @@ let daemon log =
            Logger.warn log "long async cycle %s" (Time_ns.Span.to_string span)
            ) ;
        let%bind () =
-         let open M in
          let run_snark_worker_action =
            Option.value_map run_snark_worker_flag ~default:`Don't_run
              ~f:(fun k -> `With_public_key k )
@@ -299,9 +298,9 @@ let daemon log =
            Coda_base.Banlist.create ~suspicious_dir ~punished_dir
          in
          let trust_system = Coda_base.Trust_system.create ~db_dir:trust_dir in
-         let time_controller = Inputs.Time.Controller.create () in
+         let time_controller = M.Inputs.Time.Controller.create () in
          let net_config =
-           { Inputs.Net.Config.parent_log= log
+           { M.Inputs.Net.Config.parent_log= log
            ; time_controller
            ; gossip_net_params=
                { timeout= Time.Span.of_sec 1.
@@ -318,25 +317,35 @@ let daemon log =
            Coda_base.Receipt_chain_database.create
              ~directory:receipt_chain_dir_name
          in
-         let%bind coda =
-           Run.create
-             (Run.Config.make ~log ~net_config
-                ~run_snark_worker:(Option.is_some run_snark_worker_flag)
-                ~staged_ledger_persistant_location:(conf_dir ^/ "staged_ledger")
-                ~transaction_pool_disk_location:(conf_dir ^/ "transaction_pool")
-                ~snark_pool_disk_location:(conf_dir ^/ "snark_pool")
-                ~ledger_db_location:(conf_dir ^/ "ledger_db")
-                ~snark_work_fee:snark_work_fee_flag ~receipt_chain_database
-                ~time_controller ?propose_keypair:Config0.propose_keypair ()
-                ~banlist)
+         let with_coda ~f =
+           let%bind coda =
+             Run.create
+               (Run.Config.make ~log ~net_config
+                  ~run_snark_worker:(Option.is_some run_snark_worker_flag)
+                  ~staged_ledger_persistant_location:
+                    (conf_dir ^/ "staged_ledger")
+                  ~transaction_pool_disk_location:
+                    (conf_dir ^/ "transaction_pool")
+                  ~snark_pool_disk_location:(conf_dir ^/ "snark_pool")
+                  ~ledger_db_location:(conf_dir ^/ "ledger_db")
+                  ~snark_work_fee:snark_work_fee_flag ~receipt_chain_database
+                  ~time_controller ?propose_keypair:Config0.propose_keypair ()
+                  ~banlist)
+           in
+           try f coda with exn ->
+             let frontier_file = conf_dir ^/ "frontier.dot" in
+             M.visualize_frontier ~filename:frontier_file coda
+             |> Participating_state.ignore ;
+             raise exn
          in
-         let%map () = maybe_sleep 3. in
-         M.start coda ;
-         let web_service = Web_pipe.get_service () in
-         Web_pipe.run_service (module Run) coda web_service ~conf_dir ~log ;
-         Run.setup_local_server ?client_whitelist ?rest_server_port ~coda
-           ~client_port ~log () ;
-         Run.run_snark_worker ~log ~client_port run_snark_worker_action
+         with_coda ~f:(fun coda ->
+             let%map () = maybe_sleep 3. in
+             M.start coda ;
+             let web_service = Web_pipe.get_service () in
+             Web_pipe.run_service (module Run) coda web_service ~conf_dir ~log ;
+             Run.setup_local_server ?client_whitelist ?rest_server_port ~coda
+               ~client_port ~log () ;
+             Run.run_snark_worker ~log ~client_port run_snark_worker_action )
        in
        Async.never ())
 

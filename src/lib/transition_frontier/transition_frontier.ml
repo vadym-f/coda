@@ -111,24 +111,37 @@ module Make (Inputs : Inputs_intf) :
       module Breadcrumb = Breadcrumb
     end)
 
-    type t = {snark_pool_refcount: Snark_pool_refcount.t} [@@deriving fields]
+    module Best_tip_diff = Best_tip_diff.Make (Breadcrumb)
 
-    let create () = {snark_pool_refcount= Snark_pool_refcount.create ()}
+    type t =
+      { snark_pool_refcount: Snark_pool_refcount.t
+      ; best_tip_diff: Best_tip_diff.t }
+    [@@deriving fields]
+
+    let create () =
+      { snark_pool_refcount= Snark_pool_refcount.create ()
+      ; best_tip_diff= Best_tip_diff.create () }
 
     type writers =
-      {snark_pool: Snark_pool_refcount.view Broadcast_pipe.Writer.t}
+      { snark_pool: Snark_pool_refcount.view Broadcast_pipe.Writer.t
+      ; best_tip_diff: Best_tip_diff.view Broadcast_pipe.Writer.t }
 
     type readers =
-      {snark_pool: Snark_pool_refcount.view Broadcast_pipe.Reader.t}
+      { snark_pool: Snark_pool_refcount.view Broadcast_pipe.Reader.t
+      ; best_tip_diff: Best_tip_diff.view Broadcast_pipe.Reader.t }
 
     let make_pipes () : readers * writers =
       let snark_reader, snark_writer =
         Broadcast_pipe.create Snark_pool_refcount.initial_view
+      and best_tip_reader, best_tip_writer =
+        Broadcast_pipe.create Best_tip_diff.initial_view
       in
-      ({snark_pool= snark_reader}, {snark_pool= snark_writer})
+      ( {snark_pool= snark_reader; best_tip_diff= best_tip_reader}
+      , {snark_pool= snark_writer; best_tip_diff= best_tip_writer} )
 
-    let close_pipes ({snark_pool} : writers) =
-      Broadcast_pipe.Writer.close snark_pool
+    let close_pipes ({snark_pool; best_tip_diff} : writers) =
+      Broadcast_pipe.Writer.close snark_pool ;
+      Broadcast_pipe.Writer.close best_tip_diff
 
     let mb_write_to_pipe diff ext_t handle pipe =
       match handle ext_t diff with
@@ -136,8 +149,12 @@ module Make (Inputs : Inputs_intf) :
       | Some new_view -> Broadcast_pipe.Writer.write pipe new_view
 
     let handle_diff t (pipes : writers) diff =
-      mb_write_to_pipe diff t.snark_pool_refcount
-        Snark_pool_refcount.handle_diff pipes.snark_pool
+      let%bind () =
+        mb_write_to_pipe diff t.snark_pool_refcount
+          Snark_pool_refcount.handle_diff pipes.snark_pool
+      in
+      mb_write_to_pipe diff t.best_tip_diff Best_tip_diff.handle_diff
+        pipes.best_tip_diff
   end
 
   type node =

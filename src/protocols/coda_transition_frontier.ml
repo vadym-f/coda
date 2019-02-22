@@ -43,6 +43,12 @@ module type Transition_frontier_extension_intf = sig
       computed view, if it's updated. *)
 end
 
+(** The type of the view onto the changes to the current best tip. This type
+    needs to be here to avoid dependency cycles. *)
+module Best_tip_diff_view = struct
+  type 'b t = {new_best_tip: 'b; old_best_tip: 'b}
+end
+
 module type Network_intf = sig
   type t
 
@@ -200,11 +206,16 @@ module type Transition_frontier_intf = sig
   val shallow_copy_root_snarked_ledger : t -> masked_ledger
 
   module Extensions : sig
+    module Best_tip_diff :
+      Transition_frontier_extension_intf
+      with type view = Breadcrumb.t Best_tip_diff_view.t Option.t
+
     module Snark_pool_refcount :
       Transition_frontier_extension_intf with type view = unit
 
     type readers =
-      {snark_pool: Snark_pool_refcount.view Broadcast_pipe.Reader.t}
+      { snark_pool: Snark_pool_refcount.view Broadcast_pipe.Reader.t
+      ; best_tip_diff: Best_tip_diff.view Broadcast_pipe.Reader.t }
   end
 
   val extension_pipes : t -> Extensions.readers

@@ -1,5 +1,6 @@
 open Core_kernel
 open Async_kernel
+open Pipe_lib
 
 (*
  * TODO: Remove could be really slow, we need to deal with this:
@@ -28,6 +29,8 @@ module Make (Payment : sig
   end
 
   val check : t -> With_valid_signature.t option
+end) (Transition_frontier : sig
+  type t
 end) =
 struct
   type pool =
@@ -36,7 +39,15 @@ struct
 
   type t = {mutable pool: pool; log: Logger.t}
 
-  let create ~parent_log =
+  type transition_frontier = Transition_frontier.t
+
+  let create ~parent_log ~frontier_broadcast_pipe =
+    don't_wait_for
+      ( fst
+      @@ Broadcast_pipe.Reader.iter frontier_broadcast_pipe
+        ~f:(fun frontier_opt -> match frontier_opt with
+              None -> printf "No frontier.\n"; Deferred.unit (* Cleanup here *)
+            | Some frontier -> printf "Got frontier!\n"; Deferred.unit) ) ;
     { pool=
         { heap= Fheap.create ~cmp:Payment.With_valid_signature.compare
         ; set= Payment.With_valid_signature.Set.empty }

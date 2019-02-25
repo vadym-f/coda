@@ -16,7 +16,8 @@ module Make (Inputs : Inputs_intf) :
    and type staged_ledger := Inputs.Staged_ledger.t
    and type masked_ledger := Ledger.Mask.Attached.t
    and type transaction_snark_scan_state := Inputs.Staged_ledger.Scan_state.t
-   and type consensus_local_state := Consensus.Local_state.t = struct
+   and type consensus_local_state := Consensus.Local_state.t
+   and type user_command := User_command.t = struct
   (* NOTE: is Consensus_mechanism.select preferable over distance? *)
   exception
     Parent_not_found of ([`Parent of State_hash.t] * [`Target of State_hash.t])
@@ -112,6 +113,12 @@ module Make (Inputs : Inputs_intf) :
       With_hash.data transition_with_hash
       |> Inputs.External_transition.Verified.protocol_state
       |> Consensus.Protocol_state.blockchain_state
+
+    let to_user_commands
+        {transition_with_hash= {data= external_transition; _}; _} =
+      let open Inputs.External_transition.Verified in
+      let open Inputs.Staged_ledger_diff in
+      user_commands @@ staged_ledger_diff external_transition
   end
 
   module Extensions = struct
@@ -138,6 +145,7 @@ module Make (Inputs : Inputs_intf) :
     type readers =
       { snark_pool: Snark_pool_refcount.view Broadcast_pipe.Reader.t
       ; best_tip_diff: Best_tip_diff.view Broadcast_pipe.Reader.t }
+    [@@deriving fields]
 
     let make_pipes () : readers * writers =
       let snark_reader, snark_writer =
